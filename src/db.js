@@ -45,6 +45,18 @@ function openDatabase(file) {
       created_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS games (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      name        TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      max_players INTEGER,
+      cover       TEXT NOT NULL DEFAULT ''
+    );
+
+    CREATE TABLE IF NOT EXISTS meta (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_messages_round ON messages(round_id, id);
     CREATE INDEX IF NOT EXISTS idx_rounds_start ON rounds(starts_at);
   `);
@@ -89,7 +101,17 @@ function createStore(db) {
                                  WHERE m.round_id = ? ORDER BY m.id DESC LIMIT ?)
                                ORDER BY id`),
     deleteMessage: db.prepare('DELETE FROM messages WHERE id = ?'),
+
+    catalog: db.prepare('SELECT id, name, max_players, cover FROM games ORDER BY name COLLATE NOCASE'),
+    catalogById: db.prepare('SELECT id, name, max_players, cover FROM games WHERE id = ?'),
+    insertGame: db.prepare('INSERT INTO games (name, max_players, cover) VALUES (?, ?, ?)'),
+    updateGame: db.prepare('UPDATE games SET name = ?, max_players = ?, cover = ? WHERE id = ?'),
+    deleteGame: db.prepare('DELETE FROM games WHERE id = ?'),
+    getMeta: db.prepare('SELECT value FROM meta WHERE key = ?'),
+    setMeta: db.prepare('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'),
   };
+
+  const toGame = (r) => (r ? { id: r.id, name: r.name, maxPlayers: r.max_players, cover: r.cover } : null);
 
   function toMessage(row) {
     return {
@@ -172,6 +194,20 @@ function createStore(db) {
       return rows.map(toMessage);
     },
     deleteMessage: (id) => q.deleteMessage.run(id).changes > 0,
+
+    listGames: () => q.catalog.all().map(toGame),
+    getGame: (id) => toGame(q.catalogById.get(id)),
+    createGame({ name, maxPlayers, cover }) {
+      const { lastInsertRowid } = q.insertGame.run(name, maxPlayers, cover);
+      return toGame(q.catalogById.get(Number(lastInsertRowid)));
+    },
+    updateGame(id, { name, maxPlayers, cover }) {
+      q.updateGame.run(name, maxPlayers, cover, id);
+      return toGame(q.catalogById.get(id));
+    },
+    deleteGame: (id) => q.deleteGame.run(id).changes > 0,
+    getMeta: (key) => q.getMeta.get(key)?.value,
+    setMeta: (key, value) => q.setMeta.run(key, String(value)),
   };
 }
 

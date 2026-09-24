@@ -6,6 +6,7 @@
   "private": true,
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "start:maxlan": "BRAND_DIR=brands/maxlan node --disable-warning=ExperimentalWarning src/server.js",
     "dev": "node --disable-warning=ExperimentalWarning --watch src/server.js",
     "test": "node --test test/*.test.js"
   },
@@ -15,6 +16,7 @@
   "license": "MIT",
   "dependencies": {
     "express": "^4.22.3",
+    "qrcode": "^1.5.4",
     "socket.io": "^4.8.3"
   },
   "devDependencies": {

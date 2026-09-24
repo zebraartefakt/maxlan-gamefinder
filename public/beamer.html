@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Beamer · %TITLE%</title>
+  <link rel="icon" href="%FAVICON%">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/brand.css">
+  <style>
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-size: clamp(14px, 1.15vw, 28px);
+      background:
+        radial-gradient(ellipse at top left, color-mix(in srgb, var(--accent) 18%, transparent), transparent 55%),
+        var(--bg);
+      cursor: none;
+    }
+    body.pointer { cursor: default; }
+    .screen { height: 100%; display: grid; grid-template-rows: auto 1fr; gap: 1.2em; padding: 1.6em 2em; }
+    .head { display: flex; align-items: center; gap: 1.5em; }
+    .head img { height: 3.6em; max-width: 30vw; object-fit: contain; }
+    .head h1 { font-size: 2.2em; }
+    .head .sub { color: var(--muted); font-size: 1.1em; }
+    .clock { margin-left: auto; text-align: right; }
+    .clock strong { display: block; font-size: 3em; line-height: 1; font-variant-numeric: tabular-nums; }
+    .clock span { color: var(--muted); }
+
+    .main { display: grid; grid-template-columns: 1fr 17em; gap: 2em; min-height: 0; }
+    .rounds { display: grid; grid-template-columns: repeat(2, 1fr); grid-auto-rows: min-content; gap: 1em; align-content: start; min-height: 0; }
+    .round-tile {
+      display: grid; grid-template-columns: 9em 1fr; gap: 1em; align-items: center;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: .9em;
+      animation: fade .5s ease-out;
+    }
+    .round-tile.soon { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 24px color-mix(in srgb, var(--accent) 35%, transparent); }
+    .round-tile.running { opacity: .75; }
+    .tile-cover {
+      width: 100%; aspect-ratio: 460 / 215; border-radius: 8px; object-fit: cover;
+      display: grid; place-content: center; font-weight: 800; font-size: 1.8em; text-transform: uppercase;
+      background: color-mix(in srgb, var(--accent) 20%, var(--surface-2)); color: var(--accent);
+    }
+    .tile-body { min-width: 0; display: grid; gap: .25em; }
+    .tile-top { display: flex; align-items: baseline; gap: .6em; }
+    .tile-top h2 { font-size: 1.45em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tile-time { font-size: 1.3em; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--accent); white-space: nowrap; }
+    .tile-meta { color: var(--muted); display: flex; gap: .8em; flex-wrap: wrap; align-items: center; }
+    .free { background: var(--ok); color: #06140e; font-weight: 800; border-radius: 6px; padding: .05em .5em; }
+    .full { background: var(--surface-2); font-weight: 700; border-radius: 6px; padding: .05em .5em; }
+    .names { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .95em; }
+    .section-title { grid-column: 1 / -1; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; font-size: .9em; font-weight: 700; margin-top: .4em; }
+    .empty-board { grid-column: 1 / -1; text-align: center; padding: 4em 1em; color: var(--muted); font-size: 1.4em; }
+    .empty-board strong { display: block; color: var(--text); font-size: 1.5em; margin-bottom: .4em; }
+
+    .side { display: grid; align-content: start; gap: 1.2em; text-align: center; }
+    .side .qr-box { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.2em; display: grid; gap: .7em; }
+    .side .qr-box img { width: 100%; background: #fff; border-radius: 10px; padding: .4em; }
+    .side .qr-box strong { font-size: 1.2em; }
+    .side .url { font-weight: 700; color: var(--accent); overflow-wrap: anywhere; }
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: .8em; }
+    .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: .8em; }
+    .stat b { display: block; font-size: 2em; line-height: 1.1; }
+    .stat span { color: var(--muted); font-size: .85em; }
+    .pager { color: var(--muted); font-size: .85em; }
+    .error-board { color: var(--danger); }
+    @keyframes fade { from { opacity: 0; transform: translateY(6px); } }
+  </style>
+</head>
+<body>
+  <div class="screen" id="screen" title="Klicken für Vollbild">
+    <header class="head">
+      <img id="logo" alt="" hidden>
+      <div>
+        <h1 id="title">%APP_NAME%</h1>
+        <div class="sub">Mitspieler gesucht? Hier sind die nächsten Runden.</div>
+      </div>
+      <div class="clock"><strong id="clock">--:--</strong><span id="date"></span></div>
+    </header>
+    <div class="main">
+      <section class="rounds" id="rounds"></section>
+      <aside class="side">
+        <div class="qr-box">
+          <strong>Mitspielen? Scannen!</strong>
+          <img id="qr" alt="QR-Code">
+          <div class="url" id="url"></div>
+        </div>
+        <div class="stats">
+          <div class="stat"><b id="stat-online">–</b><span>online</span></div>
+          <div class="stat"><b id="stat-rounds">–</b><span>Runden geplant</span></div>
+        </div>
+        <div class="pager" id="pager"></div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    (async () => {
+      const $ = (s) => document.querySelector(s);
+      const PAGE_SIZE = 8;
+      const PAGE_SECONDS = 12;
+      const RUNNING_VISIBLE_MS = 60 * 60 * 1000;
+      const fmtTime = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit' });
+      const fmtDate = new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: '2-digit', month: 'long' });
+      const fmtDay = new Intl.DateTimeFormat('de-DE', { weekday: 'short' });
+
+      const { brand } = await fetch('/api/config').then((r) => r.json());
+      if (brand.logo) { $('#logo').src = brand.logo; $('#logo').hidden = false; }
+      $('#title').textContent = brand.eventName || brand.appName;
+      const url = new URLSearchParams(location.search).get('url') || brand.publicUrl || location.origin;
+      $('#qr').src = `/api/qr.svg?text=${encodeURIComponent(url)}`;
+      $('#url').textContent = url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+
+      let board = null;
+      let page = 0;
+      let offset = 0; // Serverzeit - lokale Zeit
+
+      function el(tag, cls, text) {
+        const n = document.createElement(tag);
+        if (cls) n.className = cls;
+        if (text !== undefined) n.textContent = text;
+        return n;
+      }
+
+      function relative(ts, now) {
+        const min = Math.round((ts - now) / 60000);
+        if (min <= 0) return min > -2 ? 'jetzt' : `läuft seit ${-min} min`;
+        if (min < 60) return `in ${min} min`;
+        return `in ${Math.floor(min / 60)} h ${min % 60 ? `${min % 60} min` : ''}`.trim();
+      }
+
+      function tile(r, now, covers) {
+        const t = el('article', 'round-tile');
+        const soon = r.startsAt > now && r.startsAt - now < 30 * 60000;
+        if (soon) t.classList.add('soon');
+        if (r.startsAt <= now) t.classList.add('running');
+        const cover = covers.get(r.game.toLowerCase());
+        let c;
+        if (cover) { c = el('img', 'tile-cover'); c.src = cover; c.alt = ''; }
+        else c = el('div', 'tile-cover', r.game.slice(0, 2));
+        const body = el('div', 'tile-body');
+        const top = el('div', 'tile-top');
+        const sameDay = new Date(r.startsAt).toDateString() === new Date(now).toDateString();
+        top.append(el('span', 'tile-time', `${sameDay ? '' : `${fmtDay.format(r.startsAt)} `}${fmtTime.format(r.startsAt)}`), el('h2', '', r.game));
+        const meta = el('div', 'tile-meta');
+        meta.append(el('span', '', relative(r.startsAt, now)));
+        meta.append(el('span', '', `👥 ${r.players.length}${r.maxPlayers ? `/${r.maxPlayers}` : ''}`));
+        if (r.maxPlayers) {
+          const free = r.maxPlayers - r.players.length;
+          meta.append(free > 0 ? el('span', 'free', `Noch ${free} ${free === 1 ? 'Platz' : 'Plätze'} frei`) : el('span', 'full', r.waitlist ? `Voll · ${r.waitlist} wartend` : 'Voll'));
+        } else {
+          meta.append(el('span', 'free', 'Offen für alle'));
+        }
+        body.append(top, meta, el('div', 'names', r.players.join(' · ')));
+        t.append(c, body);
+        return t;
+      }
+
+      function render() {
+        const box = $('#rounds');
+        if (!board) return;
+        const now = Date.now() + offset;
+        const covers = new Map(board.catalog.filter((g) => g.cover).map((g) => [g.name.toLowerCase(), g.cover]));
+        const upcoming = board.rounds.filter((r) => r.startsAt > now).sort((a, b) => a.startsAt - b.startsAt);
+        const running = board.rounds.filter((r) => r.startsAt <= now && now - r.startsAt < RUNNING_VISIBLE_MS)
+          .sort((a, b) => b.startsAt - a.startsAt);
+        const items = [...upcoming.map((r) => ['up', r]), ...running.map((r) => ['run', r])];
+        const pages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+        page %= pages;
+
+        $('#stat-online').textContent = board.online;
+        $('#stat-rounds').textContent = upcoming.length;
+        $('#pager').textContent = pages > 1 ? `Seite ${page + 1} von ${pages}` : '';
+
+        box.replaceChildren();
+        if (!items.length) {
+          const e = el('div', 'empty-board');
+          e.append(el('strong', '', 'Noch keine Runden geplant'), 'Scanne den QR-Code und kündige die erste an!');
+          box.append(e);
+          return;
+        }
+        let last = null;
+        for (const [kind, r] of items.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)) {
+          if (kind !== last) {
+            box.append(el('div', 'section-title', kind === 'up' ? 'Demnächst' : 'Läuft gerade'));
+            last = kind;
+          }
+          box.append(tile(r, now, covers));
+        }
+      }
+
+      async function load() {
+        try {
+          const res = await fetch('/api/public/board');
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Fehler');
+          board = data;
+          offset = data.now - Date.now();
+          render();
+        } catch (e) {
+          if (!board) $('#rounds').replaceChildren(el('div', 'empty-board error-board', e.message));
+        }
+      }
+
+      function tick() {
+        const now = new Date(Date.now() + offset);
+        $('#clock').textContent = fmtTime.format(now);
+        $('#date').textContent = fmtDate.format(now);
+      }
+
+      await load();
+      tick();
+      setInterval(load, 10000);
+      setInterval(tick, 1000);
+      setInterval(() => { page += 1; render(); }, PAGE_SECONDS * 1000);
+
+      let hideCursor;
+      document.addEventListener('mousemove', () => {
+        document.body.classList.add('pointer');
+        clearTimeout(hideCursor);
+        hideCursor = setTimeout(() => document.body.classList.remove('pointer'), 2000);
+      });
+      $('#screen').addEventListener('click', () => {
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {});
+        else document.exitFullscreen?.();
+      });
+    })();
+  </script>
+</body>
+</html>

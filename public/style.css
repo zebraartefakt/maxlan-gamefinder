@@ -10,6 +10,7 @@
   --ok: #35d49a;
   --warn: #ffb547;
   --danger: #ff5c7a;
+  --accent-text: #ffffff;
   --radius: 12px;
   color-scheme: dark;
 }
@@ -43,7 +44,8 @@ input, select, textarea {
 }
 input:focus, select:focus, textarea:focus { border-color: var(--accent); }
 textarea { resize: vertical; }
-label { display: grid; gap: .3rem; font-weight: 500; }
+label { display: block; font-weight: 500; }
+label > :is(input, select, textarea) { display: block; margin-top: .3rem; }
 label.check { display: flex; gap: .5rem; align-items: center; font-weight: 400; cursor: pointer; }
 label.check input { width: auto; accent-color: var(--accent); }
 
@@ -57,7 +59,7 @@ label.check input { width: auto; accent-color: var(--accent); }
   transition: background .15s, border-color .15s;
 }
 .btn:hover { border-color: var(--accent); }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
 .btn.primary:hover { background: var(--accent-2); }
 .btn.danger { color: var(--danger); }
 .btn.danger:hover { border-color: var(--danger); }
@@ -86,6 +88,10 @@ label.check input { width: auto; accent-color: var(--accent); }
 }
 .login-card { width: min(380px, calc(100vw - 32px)); padding: 1.6rem; display: grid; gap: 1rem; }
 .login-card h1 { font-size: 1.5rem; }
+.login-brand { display: grid; justify-items: center; gap: .6rem; text-align: center; }
+.login-brand .brand-logo { max-width: 100%; max-height: 110px; object-fit: contain; }
+.event-name { margin: 0; color: var(--accent); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+#login-tagline { text-align: center; }
 .login-card h2 { font-size: 1.2rem; }
 .login-card p { margin: 0; }
 
@@ -94,11 +100,13 @@ label.check input { width: auto; accent-color: var(--accent); }
   position: sticky; top: 0; z-index: 10;
   display: flex; align-items: center; gap: 1rem;
   padding: .6rem 16px;
-  background: rgb(11 13 18 / .9);
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);
 }
-.brand { font-weight: 700; white-space: nowrap; }
+.brand { font-weight: 700; white-space: nowrap; display: flex; align-items: center; gap: .6rem; min-width: 0; }
+.brand .brand-logo { height: 32px; width: auto; max-width: 180px; object-fit: contain; }
+.brand-name { overflow: hidden; text-overflow: ellipsis; }
 .tabs { display: flex; gap: .25rem; flex: 1; justify-content: center; }
 .tab {
   background: none; border: 0; padding: .45rem .8rem; border-radius: 8px; cursor: pointer;
@@ -197,7 +205,7 @@ label.check input { width: auto; accent-color: var(--accent); }
   background: var(--surface-2); border-radius: 10px; padding: .45rem .7rem; margin-top: .15rem;
   white-space: pre-wrap; overflow-wrap: anywhere;
 }
-.msg.mine .msg-text { background: rgb(124 92 255 / .25); }
+.msg.mine .msg-text { background: color-mix(in srgb, var(--accent) 25%, transparent); }
 .msg.mention .msg-text { box-shadow: inset 3px 0 0 var(--warn); }
 
 /* ---- Dialogs ---- */
@@ -248,7 +256,6 @@ label.check input { width: auto; accent-color: var(--accent); }
 /* ---- Mobile ---- */
 @media (max-width: 720px) {
   .topbar { flex-wrap: wrap; gap: .5rem; }
-  .brand span { display: none; }
   .tabs { order: 3; width: 100%; justify-content: stretch; }
   .tab { flex: 1; }
   .me { margin-left: auto; }
@@ -260,4 +267,59 @@ label.check input { width: auto; accent-color: var(--accent); }
   #rd-chat { min-height: 360px; }
   .dialog.wide { height: calc(100dvh - 32px); }
   .msg { max-width: 95%; }
+}
+
+/* ---- Cover & Spielauswahl ---- */
+.cover { border-radius: 6px; object-fit: cover; aspect-ratio: 460 / 215; background: var(--surface-2); }
+.cover.thumb { height: 30px; }
+.rd-head { display: flex; align-items: center; gap: .8rem; min-width: 0; }
+#rd-cover { height: 48px; }
+
+.catalog-pick {
+  display: flex; gap: .5rem; overflow-x: auto; padding-bottom: .3rem; margin-bottom: -.2rem;
+  scrollbar-width: thin;
+}
+.pick {
+  flex: none; width: 104px; display: grid; gap: .25rem; padding: .3rem;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; text-align: center;
+}
+.pick:hover { border-color: var(--accent); }
+.pick.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.pick img, .pick-initial {
+  width: 100%; aspect-ratio: 460 / 215; border-radius: 5px; object-fit: cover;
+}
+.pick-initial {
+  display: grid; place-content: center; font-weight: 800; font-size: 1.1rem; text-transform: uppercase;
+  background: color-mix(in srgb, var(--accent) 20%, var(--surface)); color: var(--accent);
+}
+.pick-name { font-size: .75rem; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- Teilen ---- */
+.share { display: flex; gap: 1rem; align-items: center; }
+.qr { width: 120px; height: 120px; background: #fff; border-radius: 8px; padding: 4px; flex: none; }
+.share p { margin: 0 0 .3rem; }
+.share-url { font-weight: 700; overflow-wrap: anywhere; }
+.share-links { display: flex; gap: 1rem; flex-wrap: wrap; }
+.share-links a { color: var(--accent-2); }
+
+/* ---- Spiele verwalten ---- */
+.game-form { display: flex !important; gap: .5rem; margin: .8rem 0; }
+.game-form input[name=maxPlayers] { width: 5.5rem; flex: none; }
+.game-admin-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; max-height: 60vh; overflow-y: auto; }
+.game-admin { display: flex; gap: .6rem; align-items: center; background: var(--surface-2); border-radius: 8px; padding: .5rem; }
+.game-admin-fields { flex: 1; display: grid; gap: .4rem; min-width: 0; }
+.game-admin-fields input { padding: .35rem .5rem; }
+.game-admin-fields input[type=number] { flex: 0 0 5.5rem; }
+.cover-slot {
+  flex: none; width: 110px; aspect-ratio: 460 / 215; padding: 0; overflow: hidden; cursor: pointer;
+  border: 1px dashed var(--border); border-radius: 6px; background: var(--bg); color: var(--muted); font-size: .75rem;
+}
+.cover-slot:hover { border-color: var(--accent); color: var(--text); }
+.cover-slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+@media (max-width: 720px) {
+  .brand .brand-logo { height: 26px; max-width: 120px; }
+  .brand-name { display: none; }
+  .cover-slot { width: 80px; }
+  .share { flex-direction: column; align-items: flex-start; }
 }

@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aushang · %TITLE%</title>
+  <link rel="icon" href="%FAVICON%">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/brand.css">
+  <style>
+    @page { size: A4 portrait; margin: 0; }
+    body { background: #d9dbe2; color: #111; }
+    .controls {
+      display: flex; gap: .6rem; align-items: center; flex-wrap: wrap;
+      max-width: 210mm; margin: 16px auto; padding: .8rem; background: var(--surface); color: var(--text);
+      border-radius: var(--radius);
+    }
+    .controls input { flex: 1; min-width: 220px; }
+    .sheet {
+      width: 210mm; height: 297mm; margin: 0 auto 24px; background: #fff; overflow: hidden;
+      display: flex; flex-direction: column; box-shadow: 0 6px 30px rgb(0 0 0 / .25);
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    .band {
+      background: var(--bg); color: var(--text); padding: 14mm 16mm 12mm;
+      display: grid; justify-items: center; gap: 4mm; text-align: center;
+      border-bottom: 3mm solid var(--accent);
+    }
+    .band img { max-width: 150mm; max-height: 45mm; object-fit: contain; }
+    .band .app { font-size: 15pt; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+    .band h1 { font-size: 34pt; }
+    .body { flex: 1; display: grid; justify-items: center; align-content: center; gap: 7mm; padding: 10mm 16mm; text-align: center; }
+    .body h2 { font-size: 30pt; color: #111; }
+    .body .lead { font-size: 15pt; margin: 0; color: #333; }
+    .qr-big { width: 95mm; height: 95mm; border: 3mm solid var(--accent); border-radius: 6mm; padding: 3mm; }
+    .url { font: 700 20pt ui-monospace, "Cascadia Mono", Consolas, monospace; color: #111; overflow-wrap: anywhere; }
+    .steps { display: flex; gap: 6mm; margin: 0; padding: 0; list-style: none; counter-reset: s; }
+    .steps li { width: 50mm; font-size: 12pt; color: #333; counter-increment: s; }
+    .steps li::before {
+      content: counter(s); display: grid; place-content: center; margin: 0 auto 2mm;
+      width: 10mm; height: 10mm; border-radius: 50%; background: var(--accent); color: var(--accent-text);
+      font-weight: 800; font-size: 14pt;
+    }
+    .foot { padding: 6mm 16mm; text-align: center; color: #666; font-size: 11pt; border-top: 1px solid #ddd; }
+    @media print {
+      body { background: #fff; }
+      .controls { display: none; }
+      .sheet { margin: 0; box-shadow: none; }
+    }
+    @media screen and (max-width: 840px) {
+      .sheet { zoom: .45; }
+    }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <label for="url" class="small">Adresse der App</label>
+    <input id="url" type="url">
+    <button class="btn primary" onclick="window.print()">🖨 Drucken</button>
+  </div>
+
+  <article class="sheet">
+    <header class="band">
+      <img id="logo" alt="" hidden>
+      <h1 id="event" hidden></h1>
+      <div class="app" id="app">%APP_NAME%</div>
+    </header>
+    <section class="body">
+      <h2>Mitspieler gesucht?</h2>
+      <p class="lead">Kündige deine Runde an – oder steig bei anderen ein.</p>
+      <img id="qr" class="qr-big" alt="QR-Code">
+      <div class="url" id="url-text"></div>
+      <ol class="steps">
+        <li>QR-Code scannen oder Adresse im Browser öffnen</li>
+        <li>Nickname und Sitzplatz eingeben</li>
+        <li>Runde ankündigen oder mitmachen – und im Chat abstimmen</li>
+      </ol>
+    </section>
+    <footer class="foot" id="foot">Viel Spaß beim Zocken!</footer>
+  </article>
+
+  <script>
+    (async () => {
+      const $ = (s) => document.querySelector(s);
+      const { brand } = await fetch('/api/config').then((r) => r.json());
+      if (brand.logo) { $('#logo').src = brand.logo; $('#logo').hidden = false; }
+      else if (brand.eventName) { $('#event').textContent = brand.eventName; $('#event').hidden = false; }
+      $('#app').textContent = brand.appName;
+      if (brand.websiteUrl) $('#foot').textContent = `Viel Spaß beim Zocken! · ${brand.websiteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}`;
+
+      const initial = new URLSearchParams(location.search).get('url') || brand.publicUrl || location.origin;
+      const input = $('#url');
+      function render() {
+        const url = input.value.trim() || location.origin;
+        $('#url-text').textContent = url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+        $('#qr').src = `/api/qr.svg?text=${encodeURIComponent(url)}`;
+      }
+      input.value = initial;
+      input.addEventListener('input', render);
+      render();
+      if (/^https?:\/\/(localhost|127\.)/.test(initial)) {
+        input.insertAdjacentHTML('afterend', '<span class="small" style="color:var(--warn)">⚠ localhost ist für andere nicht erreichbar – bitte die LAN-Adresse eintragen.</span>');
+      }
+    })();
+  </script>
+</body>
+</html>

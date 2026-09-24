@@ -6,11 +6,19 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # Passwort für Admin-Funktionen (Runden/Nachrichten/Nutzer löschen). Leer = deaktiviert.
+      # Branding-Profil (Ordner mit brand.json, Logo, games.json)
+      BRAND_DIR: /app/brands/maxlan
+      # Adresse, unter der Teilnehmer die App erreichen (für QR-Code, Aushang und Beamer)
+      PUBLIC_URL: "http://192.168.1.10:3000"
+      # Passwort für Admin-Funktionen (Spieleliste, Moderation). Leer = deaktiviert.
       ADMIN_PASSWORD: "bitte-aendern"
+      # Beamer-Ansicht ohne Login erlauben (true/false)
+      PUBLIC_BOARD: "true"
       # Optional HTTPS direkt im Container (für Browser-Benachrichtigungen im LAN):
       # TLS_CERT: /certs/cert.pem
       # TLS_KEY: /certs/key.pem
     volumes:
       - ./data:/data
+      # Branding ohne Neubau des Images anpassen:
+      - ./brands/maxlan:/app/brands/maxlan:ro
       # - ./certs:/certs:ro

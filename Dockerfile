@@ -2,13 +2,15 @@ FROM node:22-alpine
 
 ENV NODE_ENV=production \
     PORT=3000 \
-    DATA_DIR=/data
+    DATA_DIR=/data \
+    BRAND_DIR=/app/brands/default
 
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY src ./src
 COPY public ./public
+COPY brands ./brands
 
 RUN mkdir -p /data && chown node:node /data
 USER node

@@ -1,0 +1,22 @@
+{
+  "appName": "Gamefinder",
+  "eventName": "Maxlan",
+  "tagline": "Mitspieler gesucht? Hier findest du deine nächste Runde.",
+  "websiteUrl": "https://www.maxlan.de",
+  "logo": "logo.svg",
+  "favicon": "favicon.svg",
+  "eventStart": "",
+  "eventEnd": "",
+  "seatHint": "z.B. B12",
+  "colors": {
+    "bg": "#0a0b0f",
+    "surface": "#15171e",
+    "surface2": "#1e212b",
+    "border": "#2c303d",
+    "text": "#eceef4",
+    "muted": "#8d93a5",
+    "accent": "#ff6a13",
+    "accent2": "#ff8a45",
+    "accentText": "#ffffff"
+  }
+}

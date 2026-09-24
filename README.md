@@ -1,15 +1,17 @@
-# 🎮 MaxLAN Gamefinder
+# 🎮 Gamefinder für LAN-Partys
 
-Mitspieler finden auf der LAN-Party: Teilnehmer kündigen Spielrunden an (z.B. „Samstag 14:00 FlatOut 2, max. 8 Spieler“), andere treten mit einem Klick bei und alle stimmen sich im Chat ab.
+Mitspieler finden auf der LAN-Party: Teilnehmer kündigen Spielrunden an (z.B. „Samstag 14:00 FlatOut 2, max. 8 Spieler“), andere treten mit einem Klick bei und alle stimmen sich im Chat ab. Die App lässt sich pro Veranstaltung **branden**. Mitgeliefert ist ein Profil für die [Maxlan](https://www.maxlan.de).
 
 ## Funktionen
 
-- **Anmeldung nur mit Nickname**, optional mit Sitzplatz, ohne Passwort. Der Nickname ist an den Browser gebunden. Über den **Geräte-Code** (unter *Profil & Einstellungen*) kann man sich zusätzlich z.B. am Handy anmelden.
-- **Runden ankündigen** mit Spiel (mit Vorschlägen aus bisherigen Runden), Tag und Uhrzeit (Schnellwahl „jetzt / in 15 min / …“), optionaler **Max. Spielerzahl** und Beschreibung.
+- **Anmeldung nur mit Nickname**, optional mit Sitzplatz, ohne Passwort. Über den **Geräte-Code** (unter *Profil & Einstellungen*) nutzt man denselben Nickname auch auf dem Handy.
+- **Runden ankündigen**:
+  - Spiel aus der **Spieleliste mit Covern** wählen (die Spielerzahl wird vorausgefüllt) oder frei eintippen
+  - Tag (die **Event-Tage** aus dem Branding) und Uhrzeit, mit Schnellwahl „jetzt / in 15 min / …“
+  - optional **Max. Spieler** und eine Beschreibung
 - **Beitreten und Verlassen.** Ist die Runde voll, kommt man auf die **Warteliste** und rückt automatisch nach, sobald ein Platz frei wird.
-- Der Ersteller kann die Runde **bearbeiten oder absagen**.
-- **Chat**: ein globaler Chat für alle und ein eigener Chat pro Runde, z.B. um die Server-IP abzusprechen. Mit `@Nickname` erwähnt man jemanden gezielt.
-- **Spielerliste** mit Sitzplätzen, Online-Status und den Runden, in denen jemand ist.
+- **Chat**: ein globaler Chat und ein eigener Chat pro Runde, mit `@Nickname`-Erwähnungen.
+- **Spielerliste** mit Sitzplätzen und Online-Status.
 - **Benachrichtigungen**, einzeln abschaltbar:
   - neue Runde angekündigt
   - jemand tritt deiner Runde bei oder verlässt sie
@@ -18,9 +20,13 @@ Mitspieler finden auf der LAN-Party: Teilnehmer kündigen Spielrunden an (z.B. �
   - neue Chat-Nachrichten
   - Erinnerung 10 Minuten vor Start
 
-  Die Hinweise erscheinen immer in der Seite (mit Ton und Zähler im Tab-Titel). **System-Benachrichtigungen** des Browsers gibt es zusätzlich, wenn die Seite über HTTPS (oder `localhost`) aufgerufen wird (siehe unten).
-- **Live-Updates** über WebSockets, ohne Neuladen.
-- **Admin-Modus** (optional, per Passwort): Runden, Nachrichten und Nutzer löschen. Das Löschen eines Nutzers gibt auch dessen Nickname wieder frei, falls jemand seinen Browser-Speicher verloren hat.
+  Die Hinweise erscheinen in der Seite (mit Ton und Zähler im Tab-Titel). Über HTTPS gibt es zusätzlich System-Benachrichtigungen.
+- **QR-Code zum Teilen** unter *Profil & Einstellungen*.
+- **Aushang** (`/aushang`): eine druckfertige A4-Seite mit Logo, großem QR-Code und kurzer Anleitung zum Auslegen auf den Tischen.
+- **Beamer-Ansicht** (`/beamer`): eine Vollbild-Übersicht der nächsten Runden mit freien Plätzen, Uhrzeit, QR-Code und Anzahl der Spieler online. Sie aktualisiert sich selbst und blättert bei vielen Runden automatisch weiter. Ein Klick schaltet den Vollbildmodus um. Die Ansicht braucht keinen Login.
+- **Admin-Modus** (per Passwort):
+  - Spieleliste pflegen: Spiele anlegen, Max. Spieler festlegen, Cover hochladen oder als URL eintragen
+  - Runden, Nachrichten und Nutzer löschen. Das Löschen eines Nutzers gibt auch dessen Nickname wieder frei.
 
 ## Starten
 
@@ -30,7 +36,7 @@ Mitspieler finden auf der LAN-Party: Teilnehmer kündigen Spielrunden an (z.B. �
 docker compose up -d --build
 ```
 
-Danach ist die App unter `http://<IP-des-Servers>:3000` erreichbar. Die Daten liegen in `./data`. Setze in `docker-compose.yml` das `ADMIN_PASSWORD`.
+Passe vorher in `docker-compose.yml` die Werte `PUBLIC_URL` (die Adresse, unter der Teilnehmer die App erreichen) und `ADMIN_PASSWORD` an. Die Daten liegen in `./data`.
 
 ### Ohne Docker
 
@@ -38,24 +44,73 @@ Voraussetzung: Node.js ≥ 22.13 (nutzt das eingebaute SQLite, keine nativen Abh
 
 ```bash
 npm install
-ADMIN_PASSWORD=geheim npm start
+ADMIN_PASSWORD=geheim PUBLIC_URL=http://192.168.1.10:3000 npm run start:maxlan
+# oder neutral ohne Veranstaltungs-Branding:
+npm start
 ```
 
 ### Konfiguration (Umgebungsvariablen)
 
-| Variable         | Standard           | Bedeutung                                              |
-|------------------|--------------------|--------------------------------------------------------|
-| `PORT`           | `3000`             | HTTP(S)-Port                                           |
-| `HOST`           | `0.0.0.0`          | Bind-Adresse                                           |
-| `DATA_DIR`       | `./data`           | Ordner für die SQLite-Datenbank                        |
-| `DB_FILE`        | `$DATA_DIR/gamefinder.db` | Pfad zur Datenbank (überschreibt `DATA_DIR`)    |
-| `ADMIN_PASSWORD` | *(leer)*           | Passwort für den Admin-Modus. Leer = deaktiviert       |
-| `TLS_CERT`, `TLS_KEY` | *(leer)*      | Pfade zu Zertifikat/Key, um direkt HTTPS anzubieten    |
+| Variable              | Standard                  | Bedeutung                                                          |
+|-----------------------|---------------------------|--------------------------------------------------------------------|
+| `BRAND_DIR`           | `brands/default`          | Branding-Ordner (siehe unten)                                      |
+| `PUBLIC_URL`          | *(Adresse im Browser)*    | Adresse für QR-Codes, Aushang und Beamer. Überschreibt `publicUrl` |
+| `ADMIN_PASSWORD`      | *(leer)*                  | Passwort für den Admin-Modus. Leer = deaktiviert                   |
+| `PUBLIC_BOARD`        | `true`                    | `false` deaktiviert die Beamer-Ansicht ohne Login                  |
+| `PORT` / `HOST`       | `3000` / `0.0.0.0`        | Port und Bind-Adresse                                              |
+| `DATA_DIR`            | `./data`                  | Ordner für Datenbank und hochgeladene Cover                        |
+| `DB_FILE`             | `$DATA_DIR/gamefinder.db` | Pfad zur Datenbank                                                 |
+| `TLS_CERT`, `TLS_KEY` | *(leer)*                  | Zertifikat und Key, um direkt HTTPS anzubieten                     |
+
+## Branding
+
+Ein Branding ist ein Ordner unter `brands/`, z.B. `brands/maxlan/`:
+
+```
+brands/maxlan/
+├── brand.json    # Name, Texte, Farben, Event-Tage
+├── logo.svg      # Logo (SVG oder PNG, idealerweise für dunklen Hintergrund)
+├── favicon.svg   # Browser-Icon
+├── games.json    # Spieleliste, wird beim ersten Start übernommen
+└── covers/       # optional: Cover-Bilder für games.json
+```
+
+`brand.json` (alle Felder optional):
+
+```json
+{
+  "appName": "Gamefinder",
+  "eventName": "Maxlan",
+  "tagline": "Mitspieler gesucht? Hier findest du deine nächste Runde.",
+  "websiteUrl": "https://www.maxlan.de",
+  "publicUrl": "http://192.168.1.10:3000",
+  "logo": "logo.svg",
+  "favicon": "favicon.svg",
+  "eventStart": "2026-10-23",
+  "eventEnd": "2026-10-25",
+  "seatHint": "z.B. B12",
+  "colors": {
+    "bg": "#0a0b0f", "surface": "#15171e", "surface2": "#1e212b", "border": "#2c303d",
+    "text": "#eceef4", "muted": "#8d93a5",
+    "accent": "#ff6a13", "accent2": "#ff8a45", "accentText": "#ffffff",
+    "ok": "#35d49a", "warn": "#ffb547", "danger": "#ff5c7a"
+  }
+}
+```
+
+- **Logo**: Es erscheint auf der Anmeldeseite, in der Kopfzeile, auf dem Aushang und in der Beamer-Ansicht, immer auf dunklem Hintergrund (`bg`).
+- **Event-Tage** (`eventStart`/`eventEnd`): Beim Ankündigen stehen nur diese Tage zur Auswahl. Ohne Angabe sind es die nächsten 5 Tage.
+- **Farben**: `accent` ist die Markenfarbe für Buttons, Hervorhebungen und den Beamer-Glow.
+- **games.json**: Eine Liste von `{ "name": "...", "maxPlayers": 8, "cover": "/brand/covers/datei.jpg" }`. Sie wird nur beim allerersten Start in die Datenbank übernommen und danach im Admin-Modus gepflegt. Cover gehen auch als `https://…`-URL; im LAN ohne Internet sind lokale Dateien aber sicherer.
+
+Für eine neue Veranstaltung den Ordner kopieren, anpassen und `BRAND_DIR` darauf zeigen lassen.
+
+> **Hinweis zum Maxlan-Profil:** `brands/maxlan/logo.svg` ist ein **Platzhalter**-Schriftzug. Die Farben sind ein Vorschlag und nicht aus dem offiziellen Design übernommen. Das offizielle Logo als `logo.svg` oder `logo.png` ablegen (Dateinamen in `brand.json` anpassen) und die Farben ggf. korrigieren. Das Branding wird beim Start geladen, danach den Server neu starten.
 
 ## Betrieb im LAN vs. im Internet
 
-- **Nur im LAN:** einfach starten und die Adresse (z.B. `http://192.168.1.10:3000`) aushängen oder als QR-Code auf die Tische legen. Die App braucht kein Internet.
-- **Im Internet:** hinter einen Reverse-Proxy mit HTTPS stellen (z.B. Caddy: `gamefinder.example.de { reverse_proxy localhost:3000 }`). WebSockets müssen durchgereicht werden, was Caddy automatisch erledigt.
+- **Nur im LAN:** starten, `PUBLIC_URL` auf die LAN-Adresse setzen, `/aushang` ausdrucken und `/beamer` auf dem Beamer öffnen. Die App braucht kein Internet.
+- **Im Internet:** hinter einen Reverse-Proxy mit HTTPS stellen (z.B. Caddy: `gamefinder.example.de { reverse_proxy localhost:3000 }`). WebSockets müssen durchgereicht werden. Wenn die Spielerliste nicht öffentlich sichtbar sein soll, `PUBLIC_BOARD=false` setzen.
 
 ### Browser-Benachrichtigungen im LAN
 
@@ -74,6 +129,7 @@ npm test       # API-Tests
 
 Aufbau:
 
-- `src/server.js`: Express-API, Socket.IO-Events, Validierung
+- `src/server.js`: Express-API, Socket.IO-Events, Validierung, Seiten-Auslieferung
+- `src/brand.js`: Laden des Brandings (`brand.json`, Farben → `/brand.css`)
 - `src/db.js`: SQLite-Schema und Datenzugriff
-- `public/`: Frontend in reinem HTML/CSS/JS, kein Build-Schritt
+- `public/`: Frontend in reinem HTML/CSS/JS ohne Build-Schritt. `index.html` ist die App, dazu `beamer.html` und `aushang.html`

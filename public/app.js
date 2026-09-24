@@ -1,4 +1,4 @@
-/* MaxLAN Gamefinder – Client */
+/* Gamefinder – Client */
 'use strict';
 
 (() => {
@@ -32,7 +32,8 @@
   const state = {
     token: storage.get('gf.token', null),
     me: null,
-    config: { adminEnabled: false },
+    config: { adminEnabled: false, publicBoard: true, brand: { title: document.title } },
+    catalog: [],
     rounds: new Map(),
     users: new Map(),
     online: new Set(),
@@ -89,6 +90,14 @@
     return base;
   }
 
+  const fmtOptionDay = new Intl.DateTimeFormat('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+
+  function dayOptionLabel(ts) {
+    const k = dayKey(ts);
+    const prefix = k === dayKey(Date.now()) ? 'Heute · ' : k === dayKey(Date.now() + 86400000) ? 'Morgen · ' : '';
+    return prefix + fmtOptionDay.format(ts);
+  }
+
   function whenLabel(ts) {
     const same = dayKey(ts) === dayKey(Date.now());
     return `${same ? 'Heute' : fmtShortDay.format(ts)} ${fmtTime.format(ts)} Uhr`;
@@ -122,6 +131,16 @@
     let h = 0;
     for (const ch of name.toLowerCase()) h = (h * 31 + ch.charCodeAt(0)) % 360;
     return `hsl(${h} 65% 60%)`;
+  }
+
+  function catalogEntry(name) {
+    const n = String(name).trim().toLowerCase();
+    return state.catalog.find((g) => g.name.toLowerCase() === n) || null;
+  }
+
+  function coverImg(name, cls = 'cover thumb') {
+    const g = catalogEntry(name);
+    return g && g.cover ? el('img', { class: cls, src: g.cover, alt: '', loading: 'lazy' }) : null;
   }
 
   function nick(user, { seat = false } = {}) {
@@ -263,7 +282,7 @@
       el('strong', {}, fmtTime.format(r.startsAt)),
       el('span', { class: 'muted small' }, relative(r.startsAt))),
     el('div', { class: 'round-main' },
-      el('div', { class: 'round-title' }, el('h3', {}, r.game), ...tags),
+      el('div', { class: 'round-title' }, coverImg(r.game), el('h3', {}, r.game), ...tags),
       r.description ? el('p', { class: 'muted small clamp' }, r.description) : null,
       el('div', { class: 'round-people' },
         el('span', { class: 'count', title: 'Spieler' }, '👥 ', cap),
@@ -288,6 +307,9 @@
     const r = state.rounds.get(state.openRoundId);
     if (!r) return;
     $('#rd-title').textContent = r.game;
+    const cover = catalogEntry(r.game)?.cover;
+    $('#rd-cover').hidden = !cover;
+    if (cover) $('#rd-cover').src = cover;
     $('#rd-meta').replaceChildren(
       el('span', {}, '🕑 ', whenLabel(r.startsAt), el('span', { class: 'muted' }, ` (${relative(r.startsAt)})`)),
       el('span', {}, '👑 ', nick(r.host, { seat: true })));
@@ -305,19 +327,35 @@
 
   // ---- Runde anlegen / bearbeiten ----------------------------------------
 
+  /** Tage zur Auswahl: die Event-Tage aus dem Branding oder die nächsten 5 Tage (jeweils 12 Uhr). */
+  function selectableDays() {
+    const { eventStart, eventEnd } = state.config.brand;
+    const noon = (d) => { d.setHours(12, 0, 0, 0); return d.getTime(); };
+    if (eventStart) {
+      const [y, m, d] = eventStart.split('-').map(Number);
+      const first = noon(new Date(y, m - 1, d));
+      let last = first;
+      if (eventEnd) {
+        const [y2, m2, d2] = eventEnd.split('-').map(Number);
+        last = Math.max(first, noon(new Date(y2, m2 - 1, d2)));
+      }
+      const days = [];
+      for (let ts = first; ts <= last && days.length < 14; ts += 86400000) days.push(noon(new Date(ts)));
+      return days;
+    }
+    return Array.from({ length: 5 }, (_, i) => noon(new Date(Date.now() + i * 86400000)));
+  }
+
   function fillDayOptions(selectedTs) {
     const sel = $('#edit-day');
     sel.replaceChildren();
     const keys = new Set();
-    const start = new Date();
-    start.setHours(12, 0, 0, 0);
-    for (let i = 0; i < 5; i++) {
-      const ts = start.getTime() + i * 86400000;
+    for (const ts of selectableDays()) {
       keys.add(dayKey(ts));
-      sel.append(el('option', { value: dayKey(ts) }, dayLabel(ts)));
+      sel.append(el('option', { value: dayKey(ts) }, dayOptionLabel(ts)));
     }
     if (selectedTs && !keys.has(dayKey(selectedTs))) {
-      sel.prepend(el('option', { value: dayKey(selectedTs) }, dayLabel(selectedTs)));
+      sel.prepend(el('option', { value: dayKey(selectedTs) }, dayOptionLabel(selectedTs)));
     }
     sel.value = dayKey(selectedTs || Date.now());
   }
@@ -335,22 +373,53 @@
     $('#edit-error').hidden = true;
     $('#edit-title').textContent = round ? 'Runde bearbeiten' : 'Runde ankündigen';
     $('#edit-submit').textContent = round ? 'Speichern' : 'Ankündigen';
-    $('#quick-times').hidden = Boolean(round);
+    $('#quick-times').hidden = Boolean(round) || !selectableDays().some((ts) => dayKey(ts) === dayKey(Date.now()));
     if (round) {
       form.game.value = round.game;
       form.maxPlayers.value = round.maxPlayers ?? '';
       form.description.value = round.description;
       setFormTime(round.startsAt);
     } else {
-      // nächste volle halbe Stunde
+      // nächste volle halbe Stunde – bzw. erster Event-Tag, wenn heute kein Event-Tag ist
       const next = new Date();
       next.setMinutes(next.getMinutes() < 30 ? 30 : 60, 0, 0);
+      const days = selectableDays();
+      if (!days.some((ts) => dayKey(ts) === dayKey(next.getTime())) && days[0] > Date.now()) {
+        const first = new Date(days[0]);
+        next.setFullYear(first.getFullYear(), first.getMonth(), first.getDate());
+        next.setHours(14, 0, 0, 0);
+      }
       setFormTime(next.getTime());
     }
+    renderCatalogPick();
     $('#edit-dialog').showModal();
-    api('GET', '/games').then(({ games }) => {
-      $('#game-suggestions').replaceChildren(...games.map((g) => el('option', { value: g })));
+    api('GET', '/games').then(({ games, catalog }) => {
+      state.catalog = catalog;
+      renderCatalogPick();
+      const names = new Map([...catalog.map((g) => g.name), ...games].map((g) => [g.toLowerCase(), g]));
+      $('#game-suggestions').replaceChildren(...[...names.values()].map((g) => el('option', { value: g })));
     }).catch(() => {});
+  }
+
+  function pickGame(g) {
+    const form = $('#edit-form');
+    form.game.value = g.name;
+    if (g.maxPlayers) form.maxPlayers.value = g.maxPlayers;
+    renderCatalogPick();
+  }
+
+  function renderCatalogPick() {
+    const box = $('#catalog-pick');
+    const current = $('#edit-form').game.value.trim().toLowerCase();
+    box.hidden = !state.catalog.length || state.editingRoundId !== null;
+    box.replaceChildren(...state.catalog.map((g) => el('button', {
+      type: 'button',
+      class: `pick${g.name.toLowerCase() === current ? ' active' : ''}`,
+      title: g.maxPlayers ? `${g.name} (max. ${g.maxPlayers})` : g.name,
+      onclick: () => pickGame(g),
+    },
+    g.cover ? el('img', { src: g.cover, alt: '', loading: 'lazy' }) : el('span', { class: 'pick-initial' }, g.name.slice(0, 2)),
+    el('span', { class: 'pick-name' }, g.name))));
   }
 
   async function submitEdit(e) {
@@ -473,7 +542,7 @@
   function updateTitle() {
     let total = 0;
     for (const n of state.unread.values()) total += n;
-    document.title = `${total ? `(${total}) ` : ''}MaxLAN Gamefinder`;
+    document.title = `${total ? `(${total}) ` : ''}${state.config.brand.title}`;
   }
 
   async function adminDeleteMessage(id) {
@@ -690,6 +759,12 @@
       if (state.me && u.id === state.me.id) setMe(u);
       if (state.tab === 'players') renderPlayers();
     });
+    socket.on('catalog', (catalog) => {
+      state.catalog = catalog;
+      renderRounds();
+      if ($('#games-dialog').open) renderGamesAdmin();
+      if (state.openRoundId !== null && $('#round-dialog').open) renderRoundDialog();
+    });
     socket.on('user:deleted', ({ id }) => {
       state.users.delete(id);
       state.online.delete(id);
@@ -698,7 +773,10 @@
   }
 
   async function resync() {
-    const [{ rounds }, { users, online }] = await Promise.all([api('GET', '/rounds'), api('GET', '/users')]);
+    const [{ rounds }, { users, online }, { catalog }] = await Promise.all([
+      api('GET', '/rounds'), api('GET', '/users'), api('GET', '/games'),
+    ]);
+    state.catalog = catalog;
     state.rounds = new Map(rounds.map((r) => [r.id, r]));
     state.users = new Map(users.map((u) => [u.id, u]));
     // Online-Status kommt bei bestehender Verbindung aktuell per 'presence:all'
@@ -734,11 +812,41 @@
     $('#me-seat').hidden = !user.seat;
   }
 
+  function applyBrand(brand) {
+    const logos = [$('#login-logo'), $('#top-logo')];
+    for (const img of logos) {
+      img.hidden = !brand.logo;
+      if (brand.logo) { img.src = brand.logo; img.alt = brand.eventName || brand.appName; }
+    }
+    $('#top-icon').hidden = Boolean(brand.logo);
+    $('#login-title').textContent = brand.appName;
+    $('#top-title').textContent = brand.appName;
+    $('#login-event').textContent = brand.eventName;
+    $('#login-event').hidden = !brand.eventName || Boolean(brand.logo);
+    $('#login-tagline').textContent = brand.tagline;
+    const site = $('#login-website');
+    site.hidden = !brand.websiteUrl;
+    if (brand.websiteUrl) {
+      site.href = brand.websiteUrl;
+      site.textContent = brand.websiteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    }
+    for (const input of $$('.seat-input')) input.placeholder = brand.seatHint;
+    updateTitle();
+  }
+
+  const shareUrl = () => state.config.brand.publicUrl || location.origin;
+
+  async function loadConfig() {
+    try {
+      state.config = await api('GET', '/config');
+      applyBrand(state.config.brand);
+    } catch { /* Standardwerte behalten */ }
+  }
+
   async function startApp() {
     try {
-      const [{ user }, config] = await Promise.all([api('GET', '/me'), api('GET', '/config')]);
+      const [{ user }] = await Promise.all([api('GET', '/me'), loadConfig()]);
       setMe(user);
-      state.config = config;
     } catch (e) {
       if (e.status === 401) return showLogin();
       toast(e.message, 'error');
@@ -750,6 +858,7 @@
     connectSocket();
     await resync();
     await loadMessages('global');
+    renderAdmin();
     checkReminders();
   }
 
@@ -786,6 +895,9 @@
     form.seat.value = state.me.seat;
     for (const k of Object.keys(DEFAULT_SETTINGS)) form[k].checked = state.settings[k];
     $('#device-code').value = state.token;
+    $('#share-url').textContent = shareUrl();
+    $('#share-qr').src = `/api/qr.svg?text=${encodeURIComponent(shareUrl())}`;
+    $('#beamer-link').hidden = !state.config.publicBoard;
     renderNotifyStatus();
     renderAdmin();
     $('#settings-dialog').showModal();
@@ -796,6 +908,65 @@
     $('#admin-status').textContent = state.adminPassword ? 'Du bist als Admin angemeldet.' : 'Admins können Runden, Nachrichten und Nutzer löschen.';
     $('#admin-password').hidden = Boolean(state.adminPassword);
     $('#admin-toggle').textContent = state.adminPassword ? 'Admin abmelden' : 'Anmelden';
+    $('#manage-games').hidden = !state.adminPassword;
+  }
+
+  // ---- Spiele verwalten (Admin) --------------------------------------------
+
+  let coverTarget = null;
+
+  async function adminGame(method, url, body) {
+    try {
+      await api(method, url, body);
+      return true;
+    } catch (e) {
+      toast(e.message, 'error');
+      return false;
+    }
+  }
+
+  function renderGamesAdmin() {
+    $('#game-admin-list').replaceChildren(...state.catalog.map((g) => {
+      const save = (field) => (e) => {
+        const value = field === 'maxPlayers' ? (e.target.value === '' ? null : Number(e.target.value)) : e.target.value;
+        adminGame('PATCH', `/admin/games/${g.id}`, { [field]: value });
+      };
+      return el('li', { class: 'game-admin' },
+        el('button', {
+          type: 'button',
+          class: 'cover-slot',
+          title: 'Cover hochladen',
+          onclick: () => { coverTarget = g.id; $('#cover-file').click(); },
+        }, g.cover ? el('img', { src: g.cover, alt: '' }) : el('span', {}, '＋ Cover')),
+        el('div', { class: 'game-admin-fields' },
+          el('input', { value: g.name, maxlength: 60, 'aria-label': 'Name', onchange: save('name') }),
+          el('div', { class: 'row' },
+            el('input', { type: 'number', min: 2, max: 256, value: g.maxPlayers ?? '', placeholder: 'Max.', 'aria-label': 'Max. Spieler', onchange: save('maxPlayers') }),
+            el('input', { value: g.cover.startsWith('/covers/') ? '' : g.cover, placeholder: 'oder Bild-URL', 'aria-label': 'Cover-URL', onchange: save('cover') }))),
+        el('button', {
+          type: 'button',
+          class: 'icon-btn',
+          title: 'Spiel entfernen',
+          onclick: () => confirm(`„${g.name}“ aus der Liste entfernen?`) && adminGame('DELETE', `/admin/games/${g.id}`),
+        }, '🗑'));
+    }));
+  }
+
+  async function openGamesAdmin() {
+    try { state.catalog = (await api('GET', '/games')).catalog; } catch { /* alte Liste */ }
+    renderGamesAdmin();
+    $('#games-dialog').showModal();
+  }
+
+  async function uploadCover(file) {
+    try {
+      const res = await fetch(`/api/admin/games/${coverTarget}/cover`, {
+        method: 'POST',
+        headers: { 'content-type': file.type, 'x-token': state.token, 'x-admin-password': state.adminPassword },
+        body: file,
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Upload fehlgeschlagen.');
+    } catch (e) { toast(e.message, 'error'); }
   }
 
   async function toggleAdmin() {
@@ -871,6 +1042,26 @@
 
   for (const b of $$('.tab')) b.addEventListener('click', () => switchTab(b.dataset.tab));
   $('#new-round').addEventListener('click', () => openEditDialog());
+  $('#manage-games').addEventListener('click', openGamesAdmin);
+  $('#game-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const ok = await adminGame('POST', '/admin/games', {
+      name: f.elements.namedItem('name').value, maxPlayers: f.maxPlayers.value === '' ? null : Number(f.maxPlayers.value),
+    });
+    if (ok) f.reset();
+  });
+  $('#cover-file').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (file && coverTarget !== null) uploadCover(file);
+  });
+  $('#edit-form').game.addEventListener('input', (e) => {
+    const g = catalogEntry(e.target.value);
+    const form = $('#edit-form');
+    if (g && g.maxPlayers && !form.maxPlayers.value) form.maxPlayers.value = g.maxPlayers;
+    renderCatalogPick();
+  });
   $('#round-filter').addEventListener('input', renderRounds);
   $('#only-mine').addEventListener('change', renderRounds);
   $('#player-filter').addEventListener('input', renderPlayers);
@@ -924,5 +1115,6 @@
     checkReminders();
   }, 30000);
 
-  if (state.token) startApp(); else showLogin();
+  if (state.token) startApp();
+  else loadConfig().then(showLogin);
 })();

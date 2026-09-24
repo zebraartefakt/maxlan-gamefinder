@@ -4,14 +4,21 @@ const fs = require('node:fs');
 const http = require('node:http');
 const https = require('node:https');
 const path = require('node:path');
+const os = require('node:os');
 const crypto = require('node:crypto');
 const express = require('express');
+const QRCode = require('qrcode');
 const { Server } = require('socket.io');
 const { openDatabase } = require('./db');
+const { loadBrand } = require('./brand');
 
 const LIMITS = { nickname: 24, seat: 16, game: 60, description: 300, message: 500 };
 const ROUND_VISIBLE_AFTER_START_MS = 12 * 60 * 60 * 1000;
 const CHAT_MIN_INTERVAL_MS = 400;
+const BOARD_PAST_MS = 3 * 60 * 60 * 1000;
+const COVER_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
+const PUBLIC_DIR = path.join(__dirname, '..', 'public');
+const HTML_PAGES = { '/': 'index.html', '/index.html': 'index.html', '/beamer': 'beamer.html', '/aushang': 'aushang.html' };
 
 class HttpError extends Error {
   constructor(status, message) {
@@ -45,14 +52,55 @@ function parseRoundInput(body, { isNew }) {
   return { game, description, startsAt, maxPlayers };
 }
 
+function parseGameInput(body) {
+  const name = cleanText(body.name, LIMITS.game, { required: true, field: 'Name' });
+  let maxPlayers = null;
+  if (body.maxPlayers !== undefined && body.maxPlayers !== null && body.maxPlayers !== '') {
+    maxPlayers = Number(body.maxPlayers);
+    if (!Number.isInteger(maxPlayers) || maxPlayers < 2 || maxPlayers > 256) {
+      throw new HttpError(400, 'Max. Spieler muss zwischen 2 und 256 liegen.');
+    }
+  }
+  const cover = cleanText(body.cover, 500, { field: 'Cover' });
+  if (cover && !/^(\/brand\/|\/covers\/|https?:\/\/)/.test(cover)) {
+    throw new HttpError(400, 'Cover muss eine http(s)-Adresse oder hochgeladene Datei sein.');
+  }
+  return { name, maxPlayers, cover };
+}
+
 function safeEqual(a, b) {
   const ha = crypto.createHash('sha256').update(String(a)).digest();
   const hb = crypto.createHash('sha256').update(String(b)).digest();
   return crypto.timingSafeEqual(ha, hb);
 }
 
-function createApp({ dbFile = ':memory:', adminPassword = '', tls = null } = {}) {
+function createApp({
+  dbFile = ':memory:',
+  dataDir = null,
+  brandDir = null,
+  adminPassword = '',
+  publicBoard = true,
+  tls = null,
+} = {}) {
   const store = openDatabase(dbFile);
+  const brand = loadBrand(brandDir);
+  const coverDir = path.join(dataDir || fs.mkdtempSync(path.join(os.tmpdir(), 'gamefinder-')), 'covers');
+  fs.mkdirSync(coverDir, { recursive: true });
+
+  // Spieleliste aus dem Branding einmalig übernehmen
+  if (!store.getMeta('games_seeded')) {
+    for (const g of brand.games) {
+      try { store.createGame(parseGameInput(g)); } catch (e) { console.warn(`games.json: ${g && g.name}: ${e.message}`); }
+    }
+    store.setMeta('games_seeded', '1');
+  }
+
+  const pages = {};
+  function page(file) {
+    if (!pages[file]) pages[file] = brand.renderHtml(fs.readFileSync(path.join(PUBLIC_DIR, file), 'utf8'));
+    return pages[file];
+  }
+
   const app = express();
   const server = tls ? https.createServer(tls, app) : http.createServer(app);
   const io = new Server(server);
@@ -64,7 +112,16 @@ function createApp({ dbFile = ':memory:', adminPassword = '', tls = null } = {})
 
   app.disable('x-powered-by');
   app.use(express.json({ limit: '16kb' }));
-  app.use(express.static(path.join(__dirname, '..', 'public')));
+  for (const [route, file] of Object.entries(HTML_PAGES)) {
+    app.get(route, (_req, res) => res.type('html').set('cache-control', 'no-cache').send(page(file)));
+  }
+  app.get('/brand.css', (_req, res) => res.type('css').set('cache-control', 'no-cache').send(brand.css));
+  if (brandDir) app.use('/brand', express.static(brandDir, { dotfiles: 'ignore', index: false }));
+  app.use('/covers', express.static(coverDir, {
+    index: false,
+    setHeaders: (res) => res.set('content-security-policy', "default-src 'none'"),
+  }));
+  app.use(express.static(PUBLIC_DIR, { index: false }));
 
   const api = express.Router();
 
@@ -106,7 +163,30 @@ function createApp({ dbFile = ':memory:', adminPassword = '', tls = null } = {})
   // ---- Session ------------------------------------------------------------
 
   api.get('/config', (_req, res) => {
-    res.json({ adminEnabled: Boolean(adminPassword), limits: LIMITS });
+    res.json({ adminEnabled: Boolean(adminPassword), publicBoard, limits: LIMITS, brand: brand.brand });
+  });
+
+  api.get('/qr.svg', (req, res, next) => {
+    const text = String(req.query.text || '');
+    if (!text || text.length > 1000) throw new HttpError(400, 'Ungültiger Text.');
+    QRCode.toString(text, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' })
+      .then((svg) => res.type('image/svg+xml').set('cache-control', 'public, max-age=86400').send(svg))
+      .catch(next);
+  });
+
+  api.get('/public/board', (_req, res) => {
+    if (!publicBoard) throw new HttpError(403, 'Die Beamer-Ansicht ist deaktiviert.');
+    const rounds = store.listRounds(Date.now() - BOARD_PAST_MS).map((r) => ({
+      id: r.id,
+      game: r.game,
+      startsAt: r.startsAt,
+      maxPlayers: r.maxPlayers,
+      description: r.description,
+      host: r.host.nickname,
+      players: r.players.map((p) => p.nickname),
+      waitlist: r.waitlist.length,
+    }));
+    res.json({ now: Date.now(), rounds, catalog: store.listGames(), online: online.size });
   });
 
   api.post('/login', (req, res) => {
@@ -146,7 +226,7 @@ function createApp({ dbFile = ':memory:', adminPassword = '', tls = null } = {})
 
   // ---- Rounds -------------------------------------------------------------
 
-  api.get('/games', auth, (_req, res) => res.json({ games: store.games() }));
+  api.get('/games', auth, (_req, res) => res.json({ games: store.games(), catalog: store.listGames() }));
 
   api.get('/rounds', auth, (_req, res) => {
     res.json({ rounds: store.listRounds(Date.now() - ROUND_VISIBLE_AFTER_START_MS) });
@@ -252,6 +332,64 @@ function createApp({ dbFile = ':memory:', adminPassword = '', tls = null } = {})
     res.status(204).end();
   });
 
+  function loadGame(req) {
+    const game = store.getGame(Number(req.params.id));
+    if (!game) throw new HttpError(404, 'Spiel nicht gefunden.');
+    return game;
+  }
+
+  function removeCoverFile(cover) {
+    if (!cover || !cover.startsWith('/covers/')) return;
+    fs.rmSync(path.join(coverDir, path.basename(cover)), { force: true });
+  }
+
+  function saveGame(fn) {
+    try {
+      return fn();
+    } catch (e) {
+      if (String(e.message).includes('UNIQUE')) throw new HttpError(409, 'Dieses Spiel gibt es schon.');
+      throw e;
+    }
+  }
+
+  const emitCatalog = () => io.emit('catalog', store.listGames());
+
+  api.post('/admin/games', admin, (req, res) => {
+    const game = saveGame(() => store.createGame(parseGameInput(req.body)));
+    emitCatalog();
+    res.status(201).json({ game });
+  });
+
+  api.patch('/admin/games/:id', admin, (req, res) => {
+    const old = loadGame(req);
+    const input = parseGameInput({ ...old, ...req.body });
+    const game = saveGame(() => store.updateGame(old.id, input));
+    if (old.cover !== game.cover) removeCoverFile(old.cover);
+    emitCatalog();
+    res.json({ game });
+  });
+
+  api.delete('/admin/games/:id', admin, (req, res) => {
+    const game = loadGame(req);
+    store.deleteGame(game.id);
+    removeCoverFile(game.cover);
+    emitCatalog();
+    res.status(204).end();
+  });
+
+  api.post('/admin/games/:id/cover', admin, express.raw({ type: 'image/*', limit: '4mb' }), (req, res) => {
+    const game = loadGame(req);
+    const ext = COVER_TYPES[req.get('content-type')];
+    if (!ext) throw new HttpError(400, 'Bitte ein PNG-, JPG-, WebP- oder GIF-Bild hochladen.');
+    if (!Buffer.isBuffer(req.body) || !req.body.length) throw new HttpError(400, 'Leere Datei.');
+    const file = `${game.id}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
+    fs.writeFileSync(path.join(coverDir, file), req.body);
+    const updated = store.updateGame(game.id, { ...game, cover: `/covers/${file}` });
+    removeCoverFile(game.cover);
+    emitCatalog();
+    res.json({ game: updated });
+  });
+
   api.delete('/admin/messages/:id', admin, (req, res) => {
     const message = store.messageById(Number(req.params.id));
     if (!message) throw new HttpError(404, 'Nachricht nicht gefunden.');
@@ -264,7 +402,8 @@ function createApp({ dbFile = ':memory:', adminPassword = '', tls = null } = {})
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Nicht gefunden.')));
 
   app.use((err, _req, res, _next) => {
-    const status = err.status || (err.type === 'entity.parse.failed' ? 400 : 500);
+    const status = err.status || err.statusCode || (err.type === 'entity.parse.failed' ? 400 : 500);
+    if (err.type === 'entity.too.large') err.message = 'Datei bzw. Anfrage ist zu groß.';
     if (status >= 500) console.error(err);
     res.status(status).json({ error: status >= 500 ? 'Interner Fehler.' : err.message });
   });
@@ -300,13 +439,22 @@ module.exports = { createApp };
 if (require.main === module) {
   const port = Number(process.env.PORT) || 3000;
   const host = process.env.HOST || '0.0.0.0';
-  const dbFile = process.env.DB_FILE || path.join(process.env.DATA_DIR || path.join(__dirname, '..', 'data'), 'gamefinder.db');
+  const dataDir = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
+  const dbFile = process.env.DB_FILE || path.join(dataDir, 'gamefinder.db');
+  const brandDir = process.env.BRAND_DIR ? path.resolve(process.env.BRAND_DIR) : path.join(__dirname, '..', 'brands', 'default');
   const tls = process.env.TLS_CERT && process.env.TLS_KEY
     ? { cert: fs.readFileSync(process.env.TLS_CERT), key: fs.readFileSync(process.env.TLS_KEY) }
     : null;
 
-  const { server } = createApp({ dbFile, adminPassword: process.env.ADMIN_PASSWORD || '', tls });
+  const { server } = createApp({
+    dbFile,
+    dataDir,
+    brandDir,
+    adminPassword: process.env.ADMIN_PASSWORD || '',
+    publicBoard: process.env.PUBLIC_BOARD !== 'false',
+    tls,
+  });
   server.listen(port, host, () => {
-    console.log(`MaxLAN Gamefinder läuft auf ${tls ? 'https' : 'http'}://${host}:${port} (DB: ${dbFile})`);
+    console.log(`Gamefinder läuft auf ${tls ? 'https' : 'http'}://${host}:${port} (DB: ${dbFile}, Branding: ${brandDir})`);
   });
 }

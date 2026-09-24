@@ -1,0 +1,12 @@
+[
+  { "name": "Counter-Strike 2", "maxPlayers": 10 },
+  { "name": "Rocket League", "maxPlayers": 8 },
+  { "name": "FlatOut 2", "maxPlayers": 8 },
+  { "name": "Unreal Tournament 2004", "maxPlayers": 16 },
+  { "name": "Age of Empires II", "maxPlayers": 8 },
+  { "name": "Warcraft III", "maxPlayers": 12 },
+  { "name": "Worms Armageddon", "maxPlayers": 6 },
+  { "name": "Left 4 Dead 2", "maxPlayers": 8 },
+  { "name": "Trackmania" },
+  { "name": "Minecraft" }
+]

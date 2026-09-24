@@ -3,22 +3,27 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#11141b">
-  <title>MaxLAN Gamefinder</title>
-  <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="style.css">
+  <meta name="theme-color" content="%THEME_COLOR%">
+  <title>%TITLE%</title>
+  <link rel="icon" href="%FAVICON%">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/brand.css">
 </head>
 <body>
   <!-- Login -->
   <main id="login-view" class="login" hidden>
     <form id="login-form" class="card login-card">
-      <h1>🎮 MaxLAN Gamefinder</h1>
-      <p class="muted">Finde Mitspieler für deine nächste Runde.</p>
+      <div class="login-brand">
+        <img class="brand-logo" id="login-logo" alt="" hidden>
+        <h1 id="login-title">%APP_NAME%</h1>
+        <p class="event-name" id="login-event" hidden></p>
+      </div>
+      <p class="muted" id="login-tagline"></p>
       <label>Nickname
         <input name="nickname" required minlength="2" maxlength="24" autocomplete="nickname" autofocus>
       </label>
-      <label>Sitzplatz <span class="muted">(optional, z.B. B12)</span>
-        <input name="seat" maxlength="16">
+      <label>Sitzplatz <span class="muted">(optional)</span>
+        <input name="seat" maxlength="16" class="seat-input">
       </label>
       <p class="error" id="login-error" hidden></p>
       <button class="btn primary" type="submit">Los geht's</button>
@@ -33,12 +38,17 @@
       <button class="btn primary" type="submit">Anmelden</button>
     </form>
     <button class="link" id="toggle-code">Ich habe schon einen Nickname auf einem anderen Gerät</button>
+    <a class="muted small" id="login-website" target="_blank" rel="noopener" hidden></a>
   </main>
 
   <!-- App -->
   <div id="app-view" hidden>
     <header class="topbar">
-      <div class="brand">🎮 <span>MaxLAN Gamefinder</span></div>
+      <div class="brand">
+        <img class="brand-logo" id="top-logo" alt="" hidden>
+        <span id="top-icon">🎮</span>
+        <span class="brand-name" id="top-title">%APP_NAME%</span>
+      </div>
       <nav class="tabs" role="tablist">
         <button class="tab active" data-tab="rounds">Runden</button>
         <button class="tab" data-tab="chat">Chat <span class="badge" id="global-unread" hidden></span></button>
@@ -55,6 +65,7 @@
       <div class="toolbar">
         <input type="search" id="round-filter" placeholder="Spiel suchen …">
         <label class="check"><input type="checkbox" id="only-mine"> Nur meine</label>
+        <button class="btn" id="manage-games" hidden>Spiele verwalten</button>
         <button class="btn primary" id="new-round">+ Runde ankündigen</button>
       </div>
       <div id="round-list"></div>
@@ -82,7 +93,10 @@
   <!-- Runden-Details -->
   <dialog id="round-dialog" class="dialog wide">
     <div class="dialog-head">
-      <h2 id="rd-title"></h2>
+      <div class="rd-head">
+        <img id="rd-cover" class="cover" alt="" hidden>
+        <h2 id="rd-title"></h2>
+      </div>
       <button class="icon-btn" data-close aria-label="Schließen">✕</button>
     </div>
     <div class="rd-body">
@@ -114,8 +128,9 @@
         <h2 id="edit-title">Runde ankündigen</h2>
         <button type="button" class="icon-btn" data-close aria-label="Schließen">✕</button>
       </div>
+      <div class="catalog-pick" id="catalog-pick"></div>
       <label>Spiel
-        <input name="game" required maxlength="60" list="game-suggestions" placeholder="z.B. FlatOut 2">
+        <input name="game" required maxlength="60" list="game-suggestions" placeholder="z.B. FlatOut 2" autocomplete="off">
       </label>
       <datalist id="game-suggestions"></datalist>
       <div class="row">
@@ -154,8 +169,21 @@
         <button type="button" class="icon-btn" data-close aria-label="Schließen">✕</button>
       </div>
       <label>Sitzplatz
-        <input name="seat" maxlength="16" placeholder="z.B. B12">
+        <input name="seat" maxlength="16" class="seat-input">
       </label>
+
+      <h3>App teilen</h3>
+      <div class="share">
+        <img id="share-qr" class="qr" alt="QR-Code zur App">
+        <div>
+          <p class="share-url" id="share-url"></p>
+          <p class="muted small">Andere scannen einfach den Code.</p>
+          <p class="share-links">
+            <a href="/aushang" target="_blank" rel="noopener">🖨 Aushang drucken</a>
+            <a href="/beamer" target="_blank" rel="noopener" id="beamer-link">📺 Beamer-Ansicht</a>
+          </p>
+        </div>
+      </div>
 
       <h3>Geräte-Code</h3>
       <p class="muted small">Damit meldest du dich mit deinem Nickname auf einem weiteren Gerät (z.B. Handy) an. Nicht weitergeben!</p>
@@ -190,9 +218,25 @@
     </form>
   </dialog>
 
+  <!-- Spiele verwalten (Admin) -->
+  <dialog id="games-dialog" class="dialog">
+    <div class="dialog-head">
+      <h2>Spiele verwalten</h2>
+      <button class="icon-btn" data-close aria-label="Schließen">✕</button>
+    </div>
+    <p class="muted small">Diese Spiele werden beim Ankündigen einer Runde vorgeschlagen. Die Spielerzahl wird automatisch vorausgefüllt.</p>
+    <form id="game-form" class="game-form">
+      <input name="name" required maxlength="60" placeholder="Spielname">
+      <input name="maxPlayers" type="number" min="2" max="256" placeholder="Max.">
+      <button class="btn primary">Hinzufügen</button>
+    </form>
+    <ul id="game-admin-list" class="game-admin-list"></ul>
+    <input type="file" id="cover-file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+  </dialog>
+
   <div id="toasts" class="toasts" aria-live="polite"></div>
 
   <script src="/socket.io/socket.io.min.js"></script>
-  <script src="app.js"></script>
+  <script src="/app.js"></script>
 </body>
 </html>
