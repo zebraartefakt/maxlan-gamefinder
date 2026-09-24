@@ -70,6 +70,24 @@ function parseGameInput(body) {
   return { name, maxPlayers, cover };
 }
 
+/**
+ * Versionskennung der ausgelieferten Oberfläche: Hash über alle Dateien in public/ und das
+ * Branding. Ändert sich etwas davon, laden offene Beamer-Ansichten sich selbst neu.
+ */
+function computeVersion(brand) {
+  const hash = crypto.createHash('sha256');
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else hash.update(entry.name).update(fs.readFileSync(full));
+    }
+  };
+  walk(PUBLIC_DIR);
+  hash.update(JSON.stringify(brand.brand)).update(brand.css);
+  return hash.digest('hex').slice(0, 12);
+}
+
 function safeEqual(a, b) {
   const ha = crypto.createHash('sha256').update(String(a)).digest();
   const hb = crypto.createHash('sha256').update(String(b)).digest();
@@ -107,6 +125,8 @@ function createApp({
     }
     store.setMeta('games_seed_hash', seedHash);
   }
+
+  const version = computeVersion(brand);
 
   const pages = {};
   function page(file) {
@@ -176,7 +196,7 @@ function createApp({
   // ---- Session ------------------------------------------------------------
 
   api.get('/config', (_req, res) => {
-    res.json({ adminEnabled: Boolean(adminPassword), publicBoard, limits: LIMITS, brand: brand.brand });
+    res.json({ version, adminEnabled: Boolean(adminPassword), publicBoard, limits: LIMITS, brand: brand.brand });
   });
 
   api.get('/qr.svg', (req, res, next) => {
@@ -199,7 +219,7 @@ function createApp({
       players: r.players.map((p) => p.nickname),
       waitlist: r.waitlist.length,
     }));
-    res.json({ now: Date.now(), rounds, catalog: store.listGames(), online: online.size });
+    res.json({ version, now: Date.now(), rounds, catalog: store.listGames(), online: online.size });
   });
 
   api.post('/login', (req, res) => {

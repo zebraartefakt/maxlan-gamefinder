@@ -103,7 +103,7 @@
       const fmtDate = new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: '2-digit', month: 'long' });
       const fmtDay = new Intl.DateTimeFormat('de-DE', { weekday: 'short' });
 
-      const { brand } = await fetch('/api/config').then((r) => r.json());
+      const { brand, version } = await fetch('/api/config').then((r) => r.json());
       if (brand.logo) { $('#logo').src = brand.logo; $('#logo').hidden = false; }
       $('#title').textContent = brand.eventName || brand.appName;
       const url = new URLSearchParams(location.search).get('url') || brand.publicUrl || location.origin;
@@ -113,6 +113,7 @@
       let board = null;
       let page = 0;
       let offset = 0; // Serverzeit - lokale Zeit
+      let loadedVersion = version; // Version, mit der diese Seite geladen wurde
 
       function el(tag, cls, text) {
         const n = document.createElement(tag);
@@ -199,6 +200,12 @@
           const res = await fetch('/api/public/board');
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Fehler');
+          // Server läuft mit neuer Version (Update oder geändertes Branding) → Seite neu laden
+          if (loadedVersion && data.version && data.version !== loadedVersion) {
+            location.reload();
+            return;
+          }
+          loadedVersion = loadedVersion || data.version;
           board = data;
           offset = data.now - Date.now();
           render();

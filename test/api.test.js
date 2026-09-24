@@ -256,3 +256,23 @@ test('Spieleliste: Steam-IDs werden zu Cover-Adressen, neue Spiele werden ergän
   assert.equal(catalog.find((g) => g.name === 'Warcraft III').cover, '');
   assert.ok(catalog.length >= 30);
 });
+
+test('Versionskennung für das automatische Neuladen des Beamers', async () => {
+  const config = (await call('GET', '/config')).data;
+  const board = await (await fetch(base + '/api/public/board')).json();
+  assert.match(config.version, /^[0-9a-f]{12}$/);
+  assert.equal(board.version, config.version);
+
+  // Gleiche Dateien → gleiche Version; anderes Branding → andere Version
+  const same = createApp({ dbFile: ':memory:', brandDir: path.join(__dirname, '..', 'brands', 'maxlan') });
+  const other = createApp({ dbFile: ':memory:', brandDir: path.join(__dirname, '..', 'brands', 'default') });
+  const versionOf = async (ctx2) => {
+    await new Promise((r) => ctx2.server.listen(0, '127.0.0.1', r));
+    const v = (await (await fetch(`http://127.0.0.1:${ctx2.server.address().port}/api/config`)).json()).version;
+    ctx2.io.close();
+    await new Promise((r) => ctx2.server.close(r));
+    return v;
+  };
+  assert.equal(await versionOf(same), config.version);
+  assert.notEqual(await versionOf(other), config.version);
+});
