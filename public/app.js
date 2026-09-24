@@ -344,8 +344,19 @@
 
   // ---- Runde anlegen / bearbeiten ----------------------------------------
 
-  /** Tage zur Auswahl: die Event-Tage aus dem Branding oder die nächsten 5 Tage (jeweils 12 Uhr). */
+  /**
+   * Tage zur Auswahl: die noch anstehenden Event-Tage aus dem Branding, sonst (kein Event
+   * eingetragen oder Event vorbei) die nächsten 5 Tage – jeweils 12 Uhr.
+   */
   function selectableDays() {
+    const today = dayKey(Date.now());
+    const days = eventDays().filter((ts) => dayKey(ts) >= today);
+    if (days.length) return days;
+    const noon = (d) => { d.setHours(12, 0, 0, 0); return d.getTime(); };
+    return Array.from({ length: 5 }, (_, i) => noon(new Date(Date.now() + i * 86400000)));
+  }
+
+  function eventDays() {
     const { eventStart, eventEnd } = state.config.brand;
     const noon = (d) => { d.setHours(12, 0, 0, 0); return d.getTime(); };
     if (eventStart) {
@@ -360,7 +371,7 @@
       for (let ts = first; ts <= last && days.length < 14; ts += 86400000) days.push(noon(new Date(ts)));
       return days;
     }
-    return Array.from({ length: 5 }, (_, i) => noon(new Date(Date.now() + i * 86400000)));
+    return [];
   }
 
   function fillDayOptions(selectedTs) {
@@ -381,10 +392,38 @@
     const d = new Date(ts);
     fillDayOptions(ts);
     $('#edit-form').time.value = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    checkPastTime();
+  }
+
+  /** Startzeit aus Tag + Uhrzeit im Formular (oder null, wenn unvollständig). */
+  function formStartsAt() {
+    const form = $('#edit-form');
+    if (!form.day.value || !form.time.value) return null;
+    const [y, m, d] = form.day.value.split('-').map(Number);
+    const [hh, mm] = form.time.value.split(':').map(Number);
+    return new Date(y, m - 1, d, hh, mm).getTime();
+  }
+
+  /**
+   * Wie der Server: Neue Startzeiten dürfen höchstens pastToleranceMs zurückliegen. Beim
+   * Bearbeiten darf eine bereits vergangene Startzeit unverändert bleiben.
+   */
+  function isPastTime(ts) {
+    const tolerance = state.config.pastToleranceMs ?? 3600000;
+    const unchanged = state.editingStartsAt != null && Math.floor(ts / 60000) === Math.floor(state.editingStartsAt / 60000);
+    return ts !== null && !unchanged && ts < Date.now() - tolerance;
+  }
+
+  function checkPastTime() {
+    const past = isPastTime(formStartsAt());
+    $('#time-hint').hidden = !past;
+    $('#edit-submit').disabled = past;
+    return past;
   }
 
   async function openEditDialog(round = null) {
     state.editingRoundId = round ? round.id : null;
+    state.editingStartsAt = round ? round.startsAt : null;
     const form = $('#edit-form');
     form.reset();
     $('#edit-error').hidden = true;
@@ -507,9 +546,8 @@
   async function submitEdit(e) {
     e.preventDefault();
     const form = e.target;
-    const [y, m, d] = form.day.value.split('-').map(Number);
-    const [hh, mm] = form.time.value.split(':').map(Number);
-    const startsAt = new Date(y, m - 1, d, hh, mm).getTime();
+    if (checkPastTime()) return;
+    const startsAt = formStartsAt();
     const body = {
       game: form.game.value,
       startsAt,
@@ -1205,6 +1243,9 @@
     await Notification.requestPermission();
     renderNotifyStatus();
   });
+
+  $('#edit-day').addEventListener('change', checkPastTime);
+  $('#edit-form').time.addEventListener('input', checkPastTime);
 
   for (const b of $$('#quick-times .chip')) {
     b.addEventListener('click', () => {

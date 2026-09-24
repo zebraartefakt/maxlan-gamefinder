@@ -252,7 +252,9 @@ test('Spieleliste: Steam-IDs werden zu Cover-Adressen, neue Spiele werden ergän
   const t = await login('Steamer');
   const catalog = (await call('GET', '/games', { token: t })).data.catalog;
   const cs2 = catalog.find((g) => g.name === 'Counter-Strike 2');
-  assert.equal(cs2.cover, 'https://cdn.cloudflare.steamstatic.com/steam/apps/730/header.jpg');
+  // Steam-Adresse aus games.json – oder bereits lokal gespeichert, falls ein vorheriger
+  // Test die Logos herunterladen konnte (abhängig vom Netzwerk der Testumgebung)
+  assert.match(cs2.cover, /^(https:\/\/cdn\.cloudflare\.steamstatic\.com\/steam\/apps\/730\/header\.jpg|\/covers\/.+)$/);
   assert.equal(catalog.find((g) => g.name === 'Warcraft III').cover, '');
   assert.ok(catalog.length >= 30);
 });
@@ -275,4 +277,23 @@ test('Versionskennung für das automatische Neuladen des Beamers', async () => {
   };
   assert.equal(await versionOf(same), config.version);
   assert.notEqual(await versionOf(other), config.version);
+});
+
+test('Startzeit in der Vergangenheit: weder beim Anlegen noch beim Bearbeiten', async () => {
+  const t = await login('Zeitreisender');
+  const h = 60 * 60 * 1000;
+  assert.equal((await call('POST', '/rounds', { token: t, body: { game: 'X', startsAt: Date.now() - 20 * h } })).status, 400);
+  assert.equal((await call('POST', '/rounds', { token: t, body: { game: 'X', startsAt: Date.now() - 30 * 60 * 1000 } })).status, 201);
+
+  const { round } = (await call('POST', '/rounds', { token: t, body: { game: 'Y', startsAt: Date.now() + h } })).data;
+  const moved = await call('PATCH', `/rounds/${round.id}`, { token: t, body: { game: 'Y', startsAt: Date.now() - 20 * h } });
+  assert.equal(moved.status, 400);
+  assert.match(moved.data.error, /Vergangenheit/);
+
+  // Eine längst laufende Runde darf weiter bearbeitet werden, solange die Zeit gleich bleibt
+  const { store } = ctx;
+  const old = store.createRound({ game: 'Alt', startsAt: Date.now() - 5 * h, maxPlayers: null, description: '', hostId: round.host.id });
+  const edited = await call('PATCH', `/rounds/${old.id}`, { token: t, body: { game: 'Alt', startsAt: old.startsAt, description: 'läuft noch' } });
+  assert.equal(edited.status, 200);
+  assert.equal(edited.data.round.description, 'läuft noch');
 });
