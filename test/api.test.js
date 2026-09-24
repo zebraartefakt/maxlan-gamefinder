@@ -255,7 +255,7 @@ test('Spieleliste: Steam-IDs werden zu Cover-Adressen, neue Spiele werden ergän
   // Steam-Adresse aus games.json – oder bereits lokal gespeichert, falls ein vorheriger
   // Test die Logos herunterladen konnte (abhängig vom Netzwerk der Testumgebung)
   assert.match(cs2.cover, /^(https:\/\/cdn\.cloudflare\.steamstatic\.com\/steam\/apps\/730\/header\.jpg|\/covers\/.+)$/);
-  assert.equal(catalog.find((g) => g.name === 'Warcraft III').cover, '');
+  assert.equal(catalog.find((g) => g.name === 'Minecraft').cover, '');
   assert.ok(catalog.length >= 30);
 });
 

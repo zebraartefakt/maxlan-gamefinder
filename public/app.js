@@ -147,11 +147,31 @@
     return (words.length >= 2 ? words.slice(0, 2).map((w) => w[0]).join('') : name.replace(/\s+/g, '').slice(0, 2)).toUpperCase();
   }
 
+  /**
+   * Die Rahmen sind für Steam-Headerbilder im Querformat (460×215) gemacht. Hochformat-Cover werden
+   * vollständig vor einer abgedunkelten Kopie ihrer selbst gezeigt, sehr breite Logos vollständig
+   * mit Rand – statt beide stark zu beschneiden.
+   */
+  function fitCover(img) {
+    const check = () => {
+      const ratio = img.naturalHeight ? img.naturalWidth / img.naturalHeight : 2.14;
+      const poster = ratio < 1.8;
+      img.classList.toggle('fit-poster', poster);
+      img.classList.toggle('fit-logo', ratio > 2.5);
+      img.style.backgroundImage = poster
+        ? `linear-gradient(rgb(0 0 0 / .6), rgb(0 0 0 / .6)), url("${img.currentSrc || img.src}")`
+        : '';
+    };
+    if (img.complete) check();
+    img.addEventListener('load', check);
+    return img;
+  }
+
   /** Cover-Bild; fällt auf Initialen zurück, wenn kein Cover da ist oder es nicht lädt. */
   function gameIcon(game, cls) {
     const fallback = () => el('span', { class: `${cls} initials` }, initials(game.name));
     if (!game.cover) return fallback();
-    const img = el('img', { class: cls, src: game.cover, alt: '', loading: 'lazy' });
+    const img = fitCover(el('img', { class: cls, src: game.cover, alt: '', loading: 'lazy' }));
     img.addEventListener('error', () => img.replaceWith(fallback()), { once: true });
     return img;
   }
@@ -1207,6 +1227,8 @@
   $('#manage-games').addEventListener('click', openGamesAdmin);
   $('#cache-covers').addEventListener('click', cacheCovers);
   $('#rd-cover').addEventListener('error', () => { $('#rd-cover').hidden = true; });
+  fitCover($('#rd-cover'));
+  fitCover($('#game-cover'));
   $('#game-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = e.target;
