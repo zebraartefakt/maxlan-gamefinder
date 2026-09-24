@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#11141b">
+  <title>MaxLAN Gamefinder</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Login -->
+  <main id="login-view" class="login" hidden>
+    <form id="login-form" class="card login-card">
+      <h1>🎮 MaxLAN Gamefinder</h1>
+      <p class="muted">Finde Mitspieler für deine nächste Runde.</p>
+      <label>Nickname
+        <input name="nickname" required minlength="2" maxlength="24" autocomplete="nickname" autofocus>
+      </label>
+      <label>Sitzplatz <span class="muted">(optional, z.B. B12)</span>
+        <input name="seat" maxlength="16">
+      </label>
+      <p class="error" id="login-error" hidden></p>
+      <button class="btn primary" type="submit">Los geht's</button>
+    </form>
+    <form id="code-form" class="card login-card" hidden>
+      <h2>Mit Geräte-Code anmelden</h2>
+      <p class="muted small">Den Code findest du auf deinem anderen Gerät unter „Profil &amp; Einstellungen“.</p>
+      <label>Geräte-Code
+        <input name="token" required autocomplete="off">
+      </label>
+      <p class="error" id="code-error" hidden></p>
+      <button class="btn primary" type="submit">Anmelden</button>
+    </form>
+    <button class="link" id="toggle-code">Ich habe schon einen Nickname auf einem anderen Gerät</button>
+  </main>
+
+  <!-- App -->
+  <div id="app-view" hidden>
+    <header class="topbar">
+      <div class="brand">🎮 <span>MaxLAN Gamefinder</span></div>
+      <nav class="tabs" role="tablist">
+        <button class="tab active" data-tab="rounds">Runden</button>
+        <button class="tab" data-tab="chat">Chat <span class="badge" id="global-unread" hidden></span></button>
+        <button class="tab" data-tab="players">Spieler</button>
+      </nav>
+      <button class="me" id="me-button" title="Profil & Einstellungen">
+        <span id="me-nick"></span><span class="seat" id="me-seat"></span>
+      </button>
+    </header>
+
+    <div class="banner" id="conn-banner" hidden>Verbindung zum Server verloren – versuche erneut …</div>
+
+    <section id="tab-rounds" class="tab-panel">
+      <div class="toolbar">
+        <input type="search" id="round-filter" placeholder="Spiel suchen …">
+        <label class="check"><input type="checkbox" id="only-mine"> Nur meine</label>
+        <button class="btn primary" id="new-round">+ Runde ankündigen</button>
+      </div>
+      <div id="round-list"></div>
+    </section>
+
+    <section id="tab-chat" class="tab-panel" hidden>
+      <div class="chat card" data-chat="global">
+        <div class="chat-log"></div>
+        <form class="chat-form">
+          <input name="text" maxlength="500" placeholder="Nachricht an alle …" autocomplete="off">
+          <button class="btn primary">Senden</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="tab-players" class="tab-panel" hidden>
+      <div class="toolbar">
+        <input type="search" id="player-filter" placeholder="Spieler oder Platz suchen …">
+        <span class="muted" id="player-count"></span>
+      </div>
+      <ul id="player-list" class="player-list"></ul>
+    </section>
+  </div>
+
+  <!-- Runden-Details -->
+  <dialog id="round-dialog" class="dialog wide">
+    <div class="dialog-head">
+      <h2 id="rd-title"></h2>
+      <button class="icon-btn" data-close aria-label="Schließen">✕</button>
+    </div>
+    <div class="rd-body">
+      <div class="rd-info">
+        <p id="rd-meta" class="rd-meta"></p>
+        <p id="rd-desc" class="rd-desc"></p>
+        <div id="rd-actions" class="rd-actions"></div>
+        <h3>Dabei <span id="rd-count" class="muted"></span></h3>
+        <ul id="rd-players" class="people"></ul>
+        <div id="rd-wait-wrap" hidden>
+          <h3>Warteliste</h3>
+          <ul id="rd-waitlist" class="people"></ul>
+        </div>
+      </div>
+      <div class="chat" id="rd-chat">
+        <div class="chat-log"></div>
+        <form class="chat-form">
+          <input name="text" maxlength="500" placeholder="Nachricht an die Runde …" autocomplete="off">
+          <button class="btn primary">Senden</button>
+        </form>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Runde anlegen / bearbeiten -->
+  <dialog id="edit-dialog" class="dialog">
+    <form id="edit-form" method="dialog">
+      <div class="dialog-head">
+        <h2 id="edit-title">Runde ankündigen</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Schließen">✕</button>
+      </div>
+      <label>Spiel
+        <input name="game" required maxlength="60" list="game-suggestions" placeholder="z.B. FlatOut 2">
+      </label>
+      <datalist id="game-suggestions"></datalist>
+      <div class="row">
+        <label>Tag
+          <select name="day" id="edit-day"></select>
+        </label>
+        <label>Uhrzeit
+          <input name="time" type="time" required>
+        </label>
+      </div>
+      <div class="quick-times" id="quick-times">
+        <button type="button" class="chip" data-in="0">Jetzt</button>
+        <button type="button" class="chip" data-in="15">in 15 min</button>
+        <button type="button" class="chip" data-in="30">in 30 min</button>
+        <button type="button" class="chip" data-in="60">in 1 h</button>
+      </div>
+      <label>Max. Spieler <span class="muted">(leer = unbegrenzt)</span>
+        <input name="maxPlayers" type="number" min="2" max="256" placeholder="z.B. 8">
+      </label>
+      <label>Beschreibung <span class="muted">(optional)</span>
+        <textarea name="description" maxlength="300" rows="3" placeholder="Modus, Mods, Server-Infos …"></textarea>
+      </label>
+      <p class="error" id="edit-error" hidden></p>
+      <div class="dialog-foot">
+        <button type="button" class="btn" data-close>Abbrechen</button>
+        <button class="btn primary" type="submit" id="edit-submit">Ankündigen</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Profil & Einstellungen -->
+  <dialog id="settings-dialog" class="dialog">
+    <form id="settings-form" method="dialog">
+      <div class="dialog-head">
+        <h2>Profil & Einstellungen</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Schließen">✕</button>
+      </div>
+      <label>Sitzplatz
+        <input name="seat" maxlength="16" placeholder="z.B. B12">
+      </label>
+
+      <h3>Geräte-Code</h3>
+      <p class="muted small">Damit meldest du dich mit deinem Nickname auf einem weiteren Gerät (z.B. Handy) an. Nicht weitergeben!</p>
+      <div class="row">
+        <input id="device-code" readonly>
+        <button type="button" class="btn" id="copy-code">Kopieren</button>
+      </div>
+
+      <h3>Benachrichtigungen</h3>
+      <p class="muted small" id="notify-status"></p>
+      <button type="button" class="btn" id="notify-enable" hidden>Browser-Benachrichtigungen erlauben</button>
+      <label class="check"><input type="checkbox" name="n_newRound"> Neue Runden werden angekündigt</label>
+      <label class="check"><input type="checkbox" name="n_join"> Jemand tritt meinen Runden bei / verlässt sie</label>
+      <label class="check"><input type="checkbox" name="n_chat"> Chat-Nachrichten in meinen Runden</label>
+      <label class="check"><input type="checkbox" name="n_global"> Nachrichten im globalen Chat</label>
+      <label class="check"><input type="checkbox" name="n_reminder"> Erinnerung 10 Minuten vor Start</label>
+      <label class="check"><input type="checkbox" name="n_sound"> Ton abspielen</label>
+
+      <div id="admin-section">
+        <h3>Admin</h3>
+        <p class="muted small" id="admin-status"></p>
+        <div class="row">
+          <input type="password" id="admin-password" placeholder="Admin-Passwort" autocomplete="off">
+          <button type="button" class="btn" id="admin-toggle">Anmelden</button>
+        </div>
+      </div>
+
+      <div class="dialog-foot">
+        <button type="button" class="btn danger" id="logout">Abmelden</button>
+        <button class="btn primary" type="submit">Speichern</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+
+  <script src="/socket.io/socket.io.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

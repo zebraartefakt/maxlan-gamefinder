@@ -1,0 +1,16 @@
+services:
+  gamefinder:
+    build: .
+    image: maxlan-gamefinder
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Passwort für Admin-Funktionen (Runden/Nachrichten/Nutzer löschen). Leer = deaktiviert.
+      ADMIN_PASSWORD: "bitte-aendern"
+      # Optional HTTPS direkt im Container (für Browser-Benachrichtigungen im LAN):
+      # TLS_CERT: /certs/cert.pem
+      # TLS_KEY: /certs/key.pem
+    volumes:
+      - ./data:/data
+      # - ./certs:/certs:ro
