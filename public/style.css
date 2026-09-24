@@ -318,6 +318,10 @@ label.check input { width: auto; accent-color: var(--accent); }
 #cache-covers { justify-self: start; margin-top: .4rem; }
 
 /* ---- Teilen ---- */
+.warn-text { color: var(--warn); margin: .3rem 0 0; }
+.login-hint { max-width: 380px; text-align: center; margin: 0; }
+#show-login-qr { justify-self: start; }
+#login-qr { width: 170px; height: 170px; }
 .share { display: flex; gap: 1rem; align-items: center; }
 .qr { width: 120px; height: 120px; background: #fff; border-radius: 8px; padding: 4px; flex: none; }
 .share p { margin: 0 0 .3rem; }

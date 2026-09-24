@@ -1034,7 +1034,7 @@
   }
 
   function logout(ask = true) {
-    if (ask && !confirm('Wirklich abmelden? Ohne deinen Geräte-Code kannst du diesen Nickname danach nicht mehr verwenden (nur ein Admin kann ihn freigeben).')) return;
+    if (ask && !confirm('Wirklich abmelden? Wenn du nicht noch auf einem anderen Gerät angemeldet bist, kannst du diesen Nickname danach nicht mehr verwenden (nur ein Admin kann ihn freigeben).')) return;
     storage.remove('gf.token');
     state.token = null;
     location.reload();
@@ -1060,7 +1060,8 @@
     const form = $('#settings-form');
     form.seat.value = state.me.seat;
     for (const k of Object.keys(DEFAULT_SETTINGS)) form[k].checked = state.settings[k];
-    $('#device-code').value = state.token;
+    $('#login-qr-box').hidden = true;
+    $('#show-login-qr').hidden = false;
     $('#share-url').textContent = shareUrl();
     $('#share-qr').src = `/api/qr.svg?text=${encodeURIComponent(shareUrl())}`;
     $('#beamer-link').hidden = !state.config.publicBoard;
@@ -1211,16 +1212,6 @@
     const f = e.target;
     login({ nickname: f.nickname.value, seat: f.seat.value, token: state.token }, $('#login-error'));
   });
-  $('#code-form').addEventListener('submit', (e) => {
-    e.preventDefault();
-    login({ token: e.target.token.value }, $('#code-error'));
-  });
-  $('#toggle-code').addEventListener('click', () => {
-    const showCode = $('#code-form').hidden;
-    $('#code-form').hidden = !showCode;
-    $('#login-form').hidden = showCode;
-    $('#toggle-code').textContent = showCode ? 'Zurück: neuen Nickname wählen' : 'Ich habe schon einen Nickname auf einem anderen Gerät';
-  });
 
   for (const b of $$('.tab')) b.addEventListener('click', () => switchTab(b.dataset.tab));
   $('#new-round').addEventListener('click', () => openEditDialog());
@@ -1270,13 +1261,13 @@
   $('#settings-form').addEventListener('submit', saveSettings);
   $('#logout').addEventListener('click', () => logout());
   $('#admin-toggle').addEventListener('click', toggleAdmin);
-  $('#copy-code').addEventListener('click', async () => {
-    try {
-      await navigator.clipboard.writeText(state.token);
-      toast('Code kopiert.');
-    } catch {
-      $('#device-code').select();
-    }
+  // QR-Code erst auf Knopfdruck zeigen, damit ihn niemand nebenbei abfotografiert
+  $('#show-login-qr').addEventListener('click', () => {
+    const base = shareUrl().replace(/\/$/, '');
+    $('#login-qr').src = `/api/qr.svg?text=${encodeURIComponent(`${base}/#login=${state.token}`)}`;
+    $('#login-qr-localhost').hidden = !/^https?:\/\/(localhost|127\.)/.test(base);
+    $('#login-qr-box').hidden = false;
+    $('#show-login-qr').hidden = true;
   });
   $('#notify-enable').addEventListener('click', async () => {
     await Notification.requestPermission();
@@ -1318,6 +1309,37 @@
     checkReminders();
   }, 30000);
 
-  if (state.token) startApp();
-  else loadConfig().then(showLogin);
+  /**
+   * Anmeldung per QR-Code von einem anderen Gerät: Der Link enthält den Anmelde-Code im
+   * Anker (#login=…). Der Anker wird nie an den Server geschickt und sofort aus der
+   * Adresszeile entfernt.
+   */
+  async function loginFromLink() {
+    const m = location.hash.match(/^#login=([\w-]+)$/);
+    if (!m) return;
+    history.replaceState(null, '', location.pathname + location.search);
+    const token = m[1];
+    if (token === state.token) return;
+    try {
+      const { user } = await api('POST', '/login', { token });
+      if (state.token && !confirm(`Dieses Gerät ist schon mit einem anderen Nickname angemeldet. Zu „${user.nickname}“ wechseln?`)) return;
+      state.token = token;
+      storage.set('gf.token', token);
+      toast(`Angemeldet als ${user.nickname}.`);
+    } catch {
+      toast('Dieser Anmelde-Code ist ungültig. Bitte den QR-Code neu scannen.', 'error');
+    }
+  }
+
+  loginFromLink().then(() => {
+    if (state.token) startApp();
+    else loadConfig().then(showLogin);
+  });
+
+  // Link bei bereits geöffneter App im selben Tab: nur der Anker ändert sich, die Seite lädt nicht neu
+  window.addEventListener('hashchange', () => {
+    if (!location.hash.startsWith('#login=')) return;
+    const before = state.token;
+    loginFromLink().then(() => { if (state.token !== before) location.reload(); });
+  });
 })();
