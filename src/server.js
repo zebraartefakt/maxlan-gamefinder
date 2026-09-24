@@ -16,6 +16,8 @@ const LIMITS = { nickname: 24, seat: 16, game: 60, description: 300, message: 50
 const ROUND_VISIBLE_AFTER_START_MS = 12 * 60 * 60 * 1000;
 const CHAT_MIN_INTERVAL_MS = 400;
 const BOARD_PAST_MS = 3 * 60 * 60 * 1000;
+/** Wie weit eine Startzeit in der Vergangenheit liegen darf (um eine gerade gestartete Runde nachzutragen). */
+const PAST_TOLERANCE_MS = 60 * 60 * 1000;
 const COVER_MAX_BYTES = 4 * 1024 * 1024;
 const steamHeader = (appId) => `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`;
 const COVER_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
@@ -36,12 +38,15 @@ function cleanText(value, max, { required = false, field = 'Feld' } = {}) {
   return text;
 }
 
-function parseRoundInput(body, { isNew }) {
+function parseRoundInput(body, { previousStartsAt = null } = {}) {
   const game = cleanText(body.game, LIMITS.game, { required: true, field: 'Spiel' });
   const description = cleanText(body.description, LIMITS.description, { field: 'Beschreibung' });
   const startsAt = Number(body.startsAt);
   if (!Number.isFinite(startsAt) || startsAt <= 0) throw new HttpError(400, 'Ungültige Startzeit.');
-  if (isNew && startsAt < Date.now() - 60 * 60 * 1000) {
+  // Beim Bearbeiten darf eine bereits vergangene Startzeit unverändert bleiben
+  // (z.B. um die Beschreibung einer laufenden Runde zu ändern), aber nicht neu gesetzt werden.
+  const unchanged = previousStartsAt !== null && Math.floor(startsAt / 60000) === Math.floor(previousStartsAt / 60000);
+  if (!unchanged && startsAt < Date.now() - PAST_TOLERANCE_MS) {
     throw new HttpError(400, 'Die Startzeit liegt in der Vergangenheit.');
   }
   let maxPlayers = null;
@@ -196,7 +201,9 @@ function createApp({
   // ---- Session ------------------------------------------------------------
 
   api.get('/config', (_req, res) => {
-    res.json({ version, adminEnabled: Boolean(adminPassword), publicBoard, limits: LIMITS, brand: brand.brand });
+    res.json({
+      version, adminEnabled: Boolean(adminPassword), publicBoard, limits: LIMITS, pastToleranceMs: PAST_TOLERANCE_MS, brand: brand.brand,
+    });
   });
 
   api.get('/qr.svg', (req, res, next) => {
@@ -266,7 +273,7 @@ function createApp({
   });
 
   api.post('/rounds', auth, (req, res) => {
-    const input = parseRoundInput(req.body, { isNew: true });
+    const input = parseRoundInput(req.body);
     const round = store.createRound({ ...input, hostId: req.user.id });
     broadcastRound(round, { type: 'create', user: req.user });
     res.status(201).json({ round });
@@ -278,7 +285,7 @@ function createApp({
       throw new HttpError(403, 'Nur der Ersteller kann die Runde bearbeiten.');
     }
     const before = store.getRound(raw.id);
-    const round = store.updateRound(raw.id, parseRoundInput(req.body, { isNew: false }));
+    const round = store.updateRound(raw.id, parseRoundInput(req.body, { previousStartsAt: raw.starts_at }));
     broadcastRound(round, { type: 'update', user: req.user, promoted: promotedBetween(before, round) });
     res.json({ round });
   });
