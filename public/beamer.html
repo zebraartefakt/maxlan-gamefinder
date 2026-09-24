@@ -38,12 +38,12 @@
     .tile-cover {
       width: 100%; aspect-ratio: 460 / 215; border-radius: 8px; object-fit: cover;
       display: grid; place-content: center; font-weight: 800; font-size: 1.8em; text-transform: uppercase;
-      background: color-mix(in srgb, var(--accent) 20%, var(--surface-2)); color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 20%, var(--surface-2)); color: var(--accent-2);
     }
     .tile-body { min-width: 0; display: grid; gap: .25em; }
     .tile-top { display: flex; align-items: baseline; gap: .6em; }
     .tile-top h2 { font-size: 1.45em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .tile-time { font-size: 1.3em; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--accent); white-space: nowrap; }
+    .tile-time { font-size: 1.3em; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--accent-2); white-space: nowrap; }
     .tile-meta { color: var(--muted); display: flex; gap: .8em; flex-wrap: wrap; align-items: center; }
     .free { background: var(--ok); color: #06140e; font-weight: 800; border-radius: 6px; padding: .05em .5em; }
     .full { background: var(--surface-2); font-weight: 700; border-radius: 6px; padding: .05em .5em; }
@@ -56,7 +56,7 @@
     .side .qr-box { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.2em; display: grid; gap: .7em; }
     .side .qr-box img { width: 100%; background: #fff; border-radius: 10px; padding: .4em; }
     .side .qr-box strong { font-size: 1.2em; }
-    .side .url { font-weight: 700; color: var(--accent); overflow-wrap: anywhere; }
+    .side .url { font-weight: 700; color: var(--accent-2); overflow-wrap: anywhere; }
     .stats { display: grid; grid-template-columns: 1fr 1fr; gap: .8em; }
     .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: .8em; }
     .stat b { display: block; font-size: 2em; line-height: 1.1; }
@@ -125,6 +125,7 @@
         const min = Math.round((ts - now) / 60000);
         if (min <= 0) return min > -2 ? 'jetzt' : `läuft seit ${-min} min`;
         if (min < 60) return `in ${min} min`;
+        if (min >= 24 * 60) { const d = Math.round(min / 1440); return `in ${d} ${d === 1 ? 'Tag' : 'Tagen'}`; }
         return `in ${Math.floor(min / 60)} h ${min % 60 ? `${min % 60} min` : ''}`.trim();
       }
 

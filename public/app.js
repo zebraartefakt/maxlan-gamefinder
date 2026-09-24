@@ -107,7 +107,7 @@
     const min = Math.round((ts - Date.now()) / 60000);
     if (min === 0) return 'jetzt';
     const abs = Math.abs(min);
-    const txt = abs < 60 ? `${abs} min` : abs < 60 * 24 ? `${Math.floor(abs / 60)} h ${abs % 60 ? `${abs % 60} min` : ''}`.trim() : `${Math.round(abs / 1440)} Tag(en)`;
+    const txt = abs < 60 ? `${abs} min` : abs < 60 * 24 ? `${Math.floor(abs / 60)} h ${abs % 60 ? `${abs % 60} min` : ''}`.trim() : `${Math.round(abs / 1440)} ${Math.round(abs / 1440) === 1 ? 'Tag' : 'Tagen'}`;
     return min > 0 ? `in ${txt}` : `seit ${txt}`;
   }
 
@@ -821,8 +821,8 @@
     $('#top-icon').hidden = Boolean(brand.logo);
     $('#login-title').textContent = brand.appName;
     $('#top-title').textContent = brand.appName;
-    $('#login-event').textContent = brand.eventName;
-    $('#login-event').hidden = !brand.eventName || Boolean(brand.logo);
+    $('#login-event').textContent = [brand.eventName, eventDates(brand)].filter(Boolean).join(' · ');
+    $('#login-event').hidden = !brand.eventName;
     $('#login-tagline').textContent = brand.tagline;
     const site = $('#login-website');
     site.hidden = !brand.websiteUrl;
@@ -832,6 +832,16 @@
     }
     for (const input of $$('.seat-input')) input.placeholder = brand.seatHint;
     updateTitle();
+  }
+
+  /** "6.–8. November 2026" aus eventStart/eventEnd */
+  function eventDates({ eventStart, eventEnd }) {
+    if (!eventStart) return '';
+    const [a, b] = [eventStart, eventEnd || eventStart].map((d) => { const [y, m, dd] = d.split('-').map(Number); return new Date(y, m - 1, dd); });
+    const full = new Intl.DateTimeFormat('de-DE', { day: 'numeric', month: 'long', year: 'numeric' });
+    if (a.getTime() === b.getTime()) return full.format(a);
+    if (a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()) return `${a.getDate()}.–${full.format(b)}`;
+    return `${new Intl.DateTimeFormat('de-DE', { day: 'numeric', month: 'long' }).format(a)} – ${full.format(b)}`;
   }
 
   const shareUrl = () => state.config.brand.publicUrl || location.origin;

@@ -22,17 +22,18 @@
       -webkit-print-color-adjust: exact; print-color-adjust: exact;
     }
     .band {
-      background: var(--bg); color: var(--text); padding: 14mm 16mm 12mm;
-      display: grid; justify-items: center; gap: 4mm; text-align: center;
+      background: var(--bg); color: var(--text); padding: 10mm 16mm 8mm;
+      display: grid; justify-items: center; gap: 3mm; text-align: center;
       border-bottom: 3mm solid var(--accent);
     }
-    .band img { max-width: 150mm; max-height: 45mm; object-fit: contain; }
+    .band img { max-width: 150mm; max-height: 38mm; object-fit: contain; }
     .band .app { font-size: 15pt; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
     .band h1 { font-size: 34pt; }
-    .body { flex: 1; display: grid; justify-items: center; align-content: center; gap: 7mm; padding: 10mm 16mm; text-align: center; }
+    .band h1.small-event { font-size: 20pt; letter-spacing: .06em; text-transform: uppercase; }
+    .body { flex: 1; display: grid; justify-items: center; align-content: center; gap: 5mm; padding: 8mm 16mm; text-align: center; }
     .body h2 { font-size: 30pt; color: #111; }
     .body .lead { font-size: 15pt; margin: 0; color: #333; }
-    .qr-big { width: 95mm; height: 95mm; border: 3mm solid var(--accent); border-radius: 6mm; padding: 3mm; }
+    .qr-big { width: 88mm; height: 88mm; border: 3mm solid var(--accent); border-radius: 6mm; padding: 3mm; }
     .url { font: 700 20pt ui-monospace, "Cascadia Mono", Consolas, monospace; color: #111; overflow-wrap: anywhere; }
     .steps { display: flex; gap: 6mm; margin: 0; padding: 0; list-style: none; counter-reset: s; }
     .steps li { width: 50mm; font-size: 12pt; color: #333; counter-increment: s; }
@@ -84,7 +85,11 @@
       const $ = (s) => document.querySelector(s);
       const { brand } = await fetch('/api/config').then((r) => r.json());
       if (brand.logo) { $('#logo').src = brand.logo; $('#logo').hidden = false; }
-      else if (brand.eventName) { $('#event').textContent = brand.eventName; $('#event').hidden = false; }
+      if (brand.eventName) {
+        $('#event').textContent = brand.eventName;
+        $('#event').hidden = false;
+        if (brand.logo) $('#event').classList.add('small-event');
+      }
       $('#app').textContent = brand.appName;
       if (brand.websiteUrl) $('#foot').textContent = `Viel Spaß beim Zocken! · ${brand.websiteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}`;
 

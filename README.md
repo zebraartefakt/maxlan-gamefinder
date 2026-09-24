@@ -69,8 +69,8 @@ Ein Branding ist ein Ordner unter `brands/`, z.B. `brands/maxlan/`:
 ```
 brands/maxlan/
 ├── brand.json    # Name, Texte, Farben, Event-Tage
-├── logo.svg      # Logo (SVG oder PNG, idealerweise für dunklen Hintergrund)
-├── favicon.svg   # Browser-Icon
+├── logo.png      # Logo (SVG oder PNG, idealerweise mit transparentem Hintergrund)
+├── favicon.png   # Browser-Icon
 ├── games.json    # Spieleliste, wird beim ersten Start übernommen
 └── covers/       # optional: Cover-Bilder für games.json
 ```
@@ -80,19 +80,19 @@ brands/maxlan/
 ```json
 {
   "appName": "Gamefinder",
-  "eventName": "Maxlan",
+  "eventName": "Maxlan 33",
   "tagline": "Mitspieler gesucht? Hier findest du deine nächste Runde.",
   "websiteUrl": "https://www.maxlan.de",
   "publicUrl": "http://192.168.1.10:3000",
-  "logo": "logo.svg",
-  "favicon": "favicon.svg",
-  "eventStart": "2026-10-23",
-  "eventEnd": "2026-10-25",
-  "seatHint": "z.B. B12",
+  "logo": "logo.png",
+  "favicon": "favicon.png",
+  "eventStart": "2026-11-06",
+  "eventEnd": "2026-11-08",
+  "seatHint": "z.B. Tisch 4",
   "colors": {
-    "bg": "#0a0b0f", "surface": "#15171e", "surface2": "#1e212b", "border": "#2c303d",
-    "text": "#eceef4", "muted": "#8d93a5",
-    "accent": "#ff6a13", "accent2": "#ff8a45", "accentText": "#ffffff",
+    "bg": "#000000", "surface": "#121318", "surface2": "#1c1e26", "border": "#2c2f3a",
+    "text": "#eeeeee", "muted": "#9a9cab",
+    "accent": "#a2271f", "accent2": "#e25a4e", "accentText": "#ffffff",
     "ok": "#35d49a", "warn": "#ffb547", "danger": "#ff5c7a"
   }
 }
@@ -100,12 +100,12 @@ brands/maxlan/
 
 - **Logo**: Es erscheint auf der Anmeldeseite, in der Kopfzeile, auf dem Aushang und in der Beamer-Ansicht, immer auf dunklem Hintergrund (`bg`).
 - **Event-Tage** (`eventStart`/`eventEnd`): Beim Ankündigen stehen nur diese Tage zur Auswahl. Ohne Angabe sind es die nächsten 5 Tage.
-- **Farben**: `accent` ist die Markenfarbe für Buttons, Hervorhebungen und den Beamer-Glow.
+- **Farben**: `accent` ist die Markenfarbe für Buttons, Hervorhebungen und den Beamer-Glow. `accent2` ist eine hellere Variante für Text und Links, damit sie auf dunklem Grund lesbar bleiben.
 - **games.json**: Eine Liste von `{ "name": "...", "maxPlayers": 8, "cover": "/brand/covers/datei.jpg" }`. Sie wird nur beim allerersten Start in die Datenbank übernommen und danach im Admin-Modus gepflegt. Cover gehen auch als `https://…`-URL; im LAN ohne Internet sind lokale Dateien aber sicherer.
 
 Für eine neue Veranstaltung den Ordner kopieren, anpassen und `BRAND_DIR` darauf zeigen lassen.
 
-> **Hinweis zum Maxlan-Profil:** `brands/maxlan/logo.svg` ist ein **Platzhalter**-Schriftzug. Die Farben sind ein Vorschlag und nicht aus dem offiziellen Design übernommen. Das offizielle Logo als `logo.svg` oder `logo.png` ablegen (Dateinamen in `brand.json` anpassen) und die Farben ggf. korrigieren. Das Branding wird beim Start geladen, danach den Server neu starten.
+> **Maxlan-Profil:** Logo (aus dem Seitenbanner freigestellt), Favicon und Farben (Rot `#a2271f` auf Schwarz) stammen von [maxlan.de](https://www.maxlan.de). Eingetragen ist die **Maxlan 33** (6.–8. November 2026, Stadthalle Haselünne). Für die nächste Maxlan in `brands/maxlan/brand.json` nur `eventName`, `eventStart` und `eventEnd` anpassen. Da es keine Sitzplatzreservierung gibt, lautet der Sitzplatz-Hinweis „z.B. Tisch 4“.
 
 ## Betrieb im LAN vs. im Internet
 
