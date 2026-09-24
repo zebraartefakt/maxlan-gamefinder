@@ -8,7 +8,7 @@ Mitspieler finden auf der LAN-Party: Teilnehmer kündigen Spielrunden an (z.B. �
 - **Runden ankündigen**:
   - Spiel aus der **Spieleliste mit Logos** wählen oder frei eintippen. Die Auswahlliste filtert beim Tippen, lässt sich per Pfeiltasten bedienen und füllt die Spielerzahl vor. Mitgeliefert sind 36 typische LAN-Spiele
   - Tag (die **Event-Tage** aus dem Branding) und Uhrzeit, mit Schnellwahl „jetzt / in 15 min / …“
-  - optional **Max. Spieler** und eine Beschreibung
+  - optional ein **Spielmodus** (z.B. „Instagib“, max. 24 Zeichen; früher genutzte Modi werden vorgeschlagen), **Max. Spieler** und eine Beschreibung
 - **Beitreten und Verlassen.** Ist die Runde voll, kommt man auf die **Warteliste** und rückt automatisch nach, sobald ein Platz frei wird.
 - **Chat**: ein globaler Chat und ein eigener Chat pro Runde, mit `@Nickname`-Erwähnungen.
 - **Spielerliste** mit Sitzplätzen und Online-Status.
@@ -23,7 +23,9 @@ Mitspieler finden auf der LAN-Party: Teilnehmer kündigen Spielrunden an (z.B. �
   Die Hinweise erscheinen in der Seite (mit Ton und Zähler im Tab-Titel). Über HTTPS gibt es zusätzlich System-Benachrichtigungen.
 - **QR-Code zum Teilen** unter *Profil & Einstellungen*.
 - **Aushang** (`/aushang`): eine druckfertige A4-Seite mit Logo, großem QR-Code und kurzer Anleitung zum Auslegen auf den Tischen.
-- **Beamer-Ansicht** (`/beamer`): eine Vollbild-Übersicht der nächsten Runden mit freien Plätzen, Uhrzeit, QR-Code und Anzahl der Spieler online. Sie aktualisiert sich selbst und blättert bei vielen Runden automatisch weiter. Ein Klick schaltet den Vollbildmodus um. Die Ansicht braucht keinen Login.
+- **Beamer-Ansicht** (`/beamer`): eine Vollbild-Übersicht der nächsten Runden mit Spielmodus, freien Plätzen, Uhrzeit, QR-Code und Anzahl der Spieler online.
+  - Sie aktualisiert sich alle 10 Sekunden und lädt sich nach einem Server-Update selbst neu.
+  - Pro Seite zeigt sie so viele Runden, wie auf den Bildschirm passen, und blättert bei mehr automatisch weiter. Ein Klick schaltet den Vollbildmodus um. Die Ansicht braucht keinen Login.
 - **Admin-Modus** (per Passwort):
   - Spieleliste pflegen: Spiele anlegen, Max. Spieler festlegen, Cover hochladen oder als URL eintragen
   - Runden, Nachrichten und Nutzer löschen. Das Löschen eines Nutzers gibt auch dessen Nickname wieder frei.

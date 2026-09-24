@@ -297,3 +297,54 @@ test('Startzeit in der Vergangenheit: weder beim Anlegen noch beim Bearbeiten', 
   assert.equal(edited.status, 200);
   assert.equal(edited.data.round.description, 'läuft noch');
 });
+
+test('Spielmodus: optional, begrenzt, auf dem Beamer und als Vorschlag', async () => {
+  const t = await login('Modder');
+  const created = await call('POST', '/rounds', {
+    token: t, body: { game: 'Quake III Arena', mode: '  Instagib ', startsAt: inOneHour(), maxPlayers: 8 },
+  });
+  assert.equal(created.status, 201);
+  assert.equal(created.data.round.mode, 'Instagib');
+
+  const tooLong = await call('POST', '/rounds', { token: t, body: { game: 'Q3', mode: 'x'.repeat(25), startsAt: inOneHour() } });
+  assert.equal(tooLong.status, 400);
+  assert.match(tooLong.data.error, /Spielmodus/);
+
+  const noMode = await call('POST', '/rounds', { token: t, body: { game: 'Q3', startsAt: inOneHour() } });
+  assert.equal(noMode.data.round.mode, '');
+
+  const edited = await call('PATCH', `/rounds/${created.data.round.id}`, {
+    token: t, body: { game: 'Quake III Arena', mode: 'CTF', startsAt: created.data.round.startsAt },
+  });
+  assert.equal(edited.data.round.mode, 'CTF');
+
+  const board = await (await fetch(base + '/api/public/board')).json();
+  assert.equal(board.rounds.find((r) => r.id === created.data.round.id).mode, 'CTF');
+
+  const { modes } = (await call('GET', '/games', { token: t })).data;
+  assert.ok(modes.some((m) => m.game === 'Quake III Arena' && m.mode === 'CTF'));
+});
+
+test('Migration: alte Datenbank ohne Spielmodus-Spalte', () => {
+  const { DatabaseSync } = require('node:sqlite');
+  const { openDatabase } = require('../src/db');
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'gf-mig-')), 'alt.db');
+  const old = new DatabaseSync(file);
+  old.exec(`
+    CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, nickname TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      seat TEXT NOT NULL DEFAULT '', token TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL);
+    CREATE TABLE rounds (id INTEGER PRIMARY KEY AUTOINCREMENT, game TEXT NOT NULL, starts_at INTEGER NOT NULL,
+      max_players INTEGER, description TEXT NOT NULL DEFAULT '', host_id INTEGER NOT NULL, created_at INTEGER NOT NULL);
+    INSERT INTO users (nickname, token, created_at) VALUES ('Alt', 'tok', 0);
+    INSERT INTO rounds (game, starts_at, host_id, created_at) VALUES ('UT2004', ${Date.now() + 3600000}, 1, 0);
+  `);
+  old.close();
+
+  const store = openDatabase(file);
+  const [round] = store.listRounds(0);
+  assert.equal(round.game, 'UT2004');
+  assert.equal(round.mode, '');
+  const updated = store.updateRound(round.id, { ...round, mode: 'Onslaught' });
+  assert.equal(updated.mode, 'Onslaught');
+  store.close();
+});

@@ -27,11 +27,10 @@
     .clock span { color: var(--muted); }
 
     .main { display: grid; grid-template-columns: 1fr 17em; gap: 2em; min-height: 0; }
-    .rounds { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: min-content; gap: 1em; align-content: start; min-height: 0; }
+    .rounds { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: min-content; gap: .8em; align-content: start; min-height: 0; overflow: hidden; }
     .round-tile {
-      display: grid; grid-template-columns: 9em minmax(0, 1fr); gap: 1em; align-items: center;
-      background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: .9em;
-      animation: fade .5s ease-out;
+      display: grid; grid-template-columns: 7.5em minmax(0, 1fr); gap: .9em; align-items: center;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: .7em .9em;
     }
     .round-tile.soon { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 24px color-mix(in srgb, var(--accent) 35%, transparent); }
     .round-tile.running { opacity: .75; }
@@ -40,11 +39,18 @@
       display: grid; place-content: center; font-weight: 800; font-size: 1.8em; text-transform: uppercase;
       background: color-mix(in srgb, var(--accent) 20%, var(--surface-2)); color: var(--accent-2);
     }
-    .tile-body { min-width: 0; display: grid; gap: .25em; }
+    .tile-body { min-width: 0; display: grid; gap: .2em; }
     .tile-top { min-width: 0; display: grid; gap: .1em; }
-    .tile-top h2 { min-width: 0; font-size: 1.45em; line-height: 1.15; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
-    .tile-time { font-size: 1.3em; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--accent-2); white-space: nowrap; }
-    .tile-meta { color: var(--muted); display: flex; gap: .8em; flex-wrap: wrap; align-items: center; }
+    .tile-top h2 { min-width: 0; font-size: 1.35em; line-height: 1.15; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+    .tile-when { display: flex; align-items: center; gap: .6em; min-width: 0; }
+    .tile-mode {
+      flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-size: .95em; font-weight: 700; padding: .05em .55em; border-radius: 6px;
+      color: var(--accent-2); border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent);
+      background: color-mix(in srgb, var(--accent) 14%, transparent);
+    }
+    .tile-time { font-size: 1.15em; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--accent-2); white-space: nowrap; }
+    .tile-meta { color: var(--muted); display: flex; gap: .3em .7em; font-size: .92em; flex-wrap: wrap; align-items: center; }
     .free { background: var(--ok); color: #06140e; font-weight: 800; border-radius: 6px; padding: .05em .5em; }
     .full { background: var(--surface-2); font-weight: 700; border-radius: 6px; padding: .05em .5em; }
     .names { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .95em; }
@@ -63,7 +69,8 @@
     .stat span { color: var(--muted); font-size: .85em; }
     .pager { color: var(--muted); font-size: .85em; }
     .error-board { color: var(--danger); }
-    @keyframes fade { from { opacity: 0; transform: translateY(6px); } }
+    .rounds.page-change .round-tile { animation: fade .5s ease-out; }
+    @keyframes fade { from { opacity: 0; } }
   </style>
 </head>
 <body>
@@ -96,7 +103,6 @@
   <script>
     (async () => {
       const $ = (s) => document.querySelector(s);
-      const PAGE_SIZE = 6;
       const PAGE_SECONDS = 12;
       const RUNNING_VISIBLE_MS = 60 * 60 * 1000;
       const fmtTime = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit' });
@@ -111,7 +117,10 @@
       $('#url').textContent = url.replace(/^https?:\/\//, '').replace(/\/$/, '');
 
       let board = null;
-      let page = 0;
+      // Blättern: so viele Kacheln pro Seite, wie tatsächlich auf den Bildschirm passen
+      let pageStart = 0; // Index der ersten Runde auf der aktuellen Seite
+      let nextStart = 0; // Index der ersten Runde, die nicht mehr gepasst hat
+      let itemCount = 0;
       let offset = 0; // Serverzeit - lokale Zeit
       let loadedVersion = version; // Version, mit der diese Seite geladen wurde
 
@@ -147,7 +156,10 @@
         const body = el('div', 'tile-body');
         const top = el('div', 'tile-top');
         const sameDay = new Date(r.startsAt).toDateString() === new Date(now).toDateString();
-        top.append(el('span', 'tile-time', `${sameDay ? '' : `${fmtDay.format(r.startsAt)} `}${fmtTime.format(r.startsAt)}`), el('h2', '', r.game));
+        const when = el('div', 'tile-when');
+        when.append(el('span', 'tile-time', `${sameDay ? '' : `${fmtDay.format(r.startsAt)} `}${fmtTime.format(r.startsAt)}`));
+        if (r.mode) when.append(el('span', 'tile-mode', r.mode));
+        top.append(when, el('h2', '', r.game));
         const meta = el('div', 'tile-meta');
         meta.append(el('span', '', relative(r.startsAt, now)));
         meta.append(el('span', '', `👥 ${r.players.length}${r.maxPlayers ? `/${r.maxPlayers}` : ''}`));
@@ -162,8 +174,10 @@
         return t;
       }
 
-      function render() {
+      /** @param {boolean} pageChange nur beim Umblättern einblenden, nicht bei jeder Datenaktualisierung */
+      function render(pageChange = false) {
         const box = $('#rounds');
+        box.classList.toggle('page-change', pageChange);
         if (!board) return;
         const now = Date.now() + offset;
         const covers = new Map(board.catalog.filter((g) => g.cover).map((g) => [g.name.toLowerCase(), g.cover]));
@@ -171,28 +185,39 @@
         const running = board.rounds.filter((r) => r.startsAt <= now && now - r.startsAt < RUNNING_VISIBLE_MS)
           .sort((a, b) => b.startsAt - a.startsAt);
         const items = [...upcoming.map((r) => ['up', r]), ...running.map((r) => ['run', r])];
-        const pages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
-        page %= pages;
+        itemCount = items.length;
+        if (pageStart >= items.length) pageStart = 0;
 
         $('#stat-online').textContent = board.online;
         $('#stat-rounds').textContent = upcoming.length;
-        $('#pager').textContent = pages > 1 ? `Seite ${page + 1} von ${pages}` : '';
 
         box.replaceChildren();
         if (!items.length) {
           const e = el('div', 'empty-board');
           e.append(el('strong', '', 'Noch keine Runden geplant'), 'Scanne den QR-Code und kündige die erste an!');
           box.append(e);
+          nextStart = 0;
+          $('#pager').textContent = '';
           return;
         }
         let last = null;
-        for (const [kind, r] of items.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)) {
-          if (kind !== last) {
-            box.append(el('div', 'section-title', kind === 'up' ? 'Demnächst' : 'Läuft gerade'));
-            last = kind;
+        let shown = 0;
+        nextStart = items.length;
+        for (let i = pageStart; i < items.length; i++) {
+          const [kind, r] = items[i];
+          const added = [];
+          if (kind !== last) added.push(box.appendChild(el('div', 'section-title', kind === 'up' ? 'Demnächst' : 'Läuft gerade')));
+          added.push(box.appendChild(tile(r, now, covers)));
+          if (shown > 0 && box.scrollHeight > box.clientHeight + 1) {
+            added.forEach((n) => n.remove());
+            nextStart = i;
+            break;
           }
-          box.append(tile(r, now, covers));
+          last = kind;
+          shown++;
         }
+        const paged = pageStart > 0 || nextStart < items.length;
+        $('#pager').textContent = paged ? `Runden ${pageStart + 1}–${nextStart} von ${items.length}` : '';
       }
 
       async function load() {
@@ -224,7 +249,13 @@
       tick();
       setInterval(load, 10000);
       setInterval(tick, 1000);
-      setInterval(() => { page += 1; render(); }, PAGE_SECONDS * 1000);
+      setInterval(() => {
+        if (!board || (pageStart === 0 && nextStart >= itemCount)) return; // alles passt auf eine Seite
+        pageStart = nextStart;
+        render(true);
+      }, PAGE_SECONDS * 1000);
+      // Neu messen, sobald sich der verfügbare Platz ändert (Fenstergröße, nachgeladenes Logo …)
+      new ResizeObserver(() => render()).observe($('#rounds'));
 
       let hideCursor;
       document.addEventListener('mousemove', () => {

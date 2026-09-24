@@ -95,7 +95,10 @@
     <div class="dialog-head">
       <div class="rd-head">
         <img id="rd-cover" class="cover" alt="" hidden>
-        <h2 id="rd-title"></h2>
+        <div>
+          <h2 id="rd-title"></h2>
+          <span class="mode-badge" id="rd-mode" hidden></span>
+        </div>
       </div>
       <button class="icon-btn" data-close aria-label="Schließen">✕</button>
     </div>
@@ -137,6 +140,10 @@
           <ul class="combo-list" id="game-list" role="listbox" hidden></ul>
         </div>
       </div>
+      <label>Spielmodus <span class="muted">(optional)</span>
+        <input name="mode" maxlength="24" list="mode-suggestions" placeholder="z.B. Instagib, 2on2, Deathmatch" autocomplete="off">
+      </label>
+      <datalist id="mode-suggestions"></datalist>
       <div class="row">
         <label>Tag
           <select name="day" id="edit-day"></select>
@@ -156,7 +163,7 @@
         <input name="maxPlayers" type="number" min="2" max="256" placeholder="z.B. 8">
       </label>
       <label>Beschreibung <span class="muted">(optional)</span>
-        <textarea name="description" maxlength="300" rows="3" placeholder="Modus, Mods, Server-Infos …"></textarea>
+        <textarea name="description" maxlength="300" rows="3" placeholder="Mods, Regeln, Server-Infos …"></textarea>
       </label>
       <p class="error" id="edit-error" hidden></p>
       <div class="dialog-foot">
