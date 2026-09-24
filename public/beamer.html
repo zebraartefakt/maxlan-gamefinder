@@ -42,6 +42,8 @@
     .tile-body { min-width: 0; display: grid; gap: .2em; }
     .tile-top { min-width: 0; display: grid; gap: .1em; }
     .tile-top h2 { min-width: 0; font-size: 1.35em; line-height: 1.15; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+    img.tile-cover.fit-poster { object-fit: contain; background-color: var(--bg); background-size: cover; background-position: center; }
+    img.tile-cover.fit-logo { object-fit: contain; background-color: var(--bg); padding: .3em .5em; box-sizing: border-box; }
     .tile-when { display: flex; align-items: center; gap: .6em; min-width: 0; }
     .tile-mode {
       flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -158,7 +160,19 @@
       function buildTile(r, coverUrl) {
         const node = el('article', 'round-tile');
         let cover;
-        if (coverUrl) { cover = el('img', 'tile-cover'); cover.src = coverUrl; cover.alt = ''; }
+        if (coverUrl) {
+          cover = el('img', 'tile-cover');
+          // Hochformat-Cover vollständig zeigen statt beschneiden
+          cover.addEventListener('load', () => {
+            const ratio = cover.naturalWidth / cover.naturalHeight;
+            const poster = ratio < 1.8;
+            cover.classList.toggle('fit-poster', poster);
+            cover.classList.toggle('fit-logo', ratio > 2.5);
+            if (poster) cover.style.backgroundImage = `linear-gradient(rgb(0 0 0 / .6), rgb(0 0 0 / .6)), url("${cover.currentSrc}")`;
+          });
+          cover.src = coverUrl;
+          cover.alt = '';
+        }
         else cover = el('div', 'tile-cover', initials(r.game));
         const parts = {
           time: el('span', 'tile-time'),

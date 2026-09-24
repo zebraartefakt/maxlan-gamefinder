@@ -406,6 +406,22 @@ function createApp({
    * Lädt Cover, die als http(s)-URL eingetragen sind (z.B. Steam-Logos), herunter und
    * speichert sie lokal – damit sie auf der LAN auch ohne Internet angezeigt werden.
    */
+  /**
+   * Lädt ein Cover. Mit eindeutigem User-Agent (Wikimedia verlangt das) und einem erneuten
+   * Versuch, wenn der Server wegen zu vieler Anfragen bremst (HTTP 429).
+   */
+  async function fetchCover(url) {
+    const get = () => fetch(url, {
+      signal: AbortSignal.timeout(15000),
+      headers: { 'user-agent': 'LAN-Gamefinder/1.0 (+https://github.com/zebraartefakt/maxlan-gamefinder)' },
+    });
+    const res = await get();
+    if (res.status !== 429) return res;
+    const wait = Math.min(Number(res.headers.get('retry-after')) || 5, 20);
+    await new Promise((r) => setTimeout(r, wait * 1000));
+    return get();
+  }
+
   let caching = null;
   function cacheRemoteCovers() {
     if (caching) return caching;
@@ -413,7 +429,7 @@ function createApp({
       const result = { cached: [], failed: [] };
       for (const game of store.listGames().filter((g) => /^https?:\/\//.test(g.cover))) {
         try {
-          const res = await fetch(game.cover, { signal: AbortSignal.timeout(15000) });
+          const res = await fetchCover(game.cover);
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const ext = COVER_TYPES[(res.headers.get('content-type') || '').split(';')[0].trim()];
           if (!ext) throw new Error('kein unterstütztes Bildformat');

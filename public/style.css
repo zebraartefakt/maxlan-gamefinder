@@ -345,3 +345,7 @@ label.check input { width: auto; accent-color: var(--accent); }
   .cover-slot { width: 80px; }
   .share { flex-direction: column; align-items: flex-start; }
 }
+
+/* Cover, die nicht ins Querformat passen: vollständig zeigen statt beschneiden */
+img.fit-poster { object-fit: contain !important; background-color: var(--bg); background-size: cover; background-position: center; }
+img.fit-logo { object-fit: contain !important; background-color: var(--bg); padding: 2px 4px; box-sizing: border-box; }

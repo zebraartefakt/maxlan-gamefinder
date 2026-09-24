@@ -110,7 +110,7 @@ brands/maxlan/
 
 ### Spiele-Logos
 
-Bei Spielen mit `steamAppId` wird das Steam-Headerbild als Logo verwendet. Der Server lädt alle Logos, die als Internet-Adresse hinterlegt sind, **beim Start herunter und speichert sie lokal** (`DATA_DIR/covers`). So funktionieren sie auf der LAN auch ohne Internet.
+Bei Spielen mit `steamAppId` wird das Steam-Headerbild als Logo verwendet. Für Spiele ohne Steam-Seite (z.B. Warcraft III, StarCraft, Diablo II) steht in `games.json` eine `cover`-Adresse, meist ein Bild von Wikimedia. Hochformat-Cover und sehr breite Logos werden vollständig angezeigt statt beschnitten. Der Server lädt alle Logos, die als Internet-Adresse hinterlegt sind, **beim Start herunter und speichert sie lokal** (`DATA_DIR/covers`). So funktionieren sie auf der LAN auch ohne Internet.
 
 Den Server also einmal **vor** der Veranstaltung mit Internetzugang starten, oder im Admin-Modus unter *Spiele verwalten → Logos herunterladen* nachholen. Muss der Server über einen HTTP-Proxy ins Internet, zusätzlich `NODE_USE_ENV_PROXY=1` setzen. Spiele ohne Logo zeigen ihre Initialen. Eigene Logos lassen sich im Admin-Modus hochladen.
 
