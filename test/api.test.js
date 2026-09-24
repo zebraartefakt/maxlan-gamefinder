@@ -149,12 +149,13 @@ test('Admin kann Nutzer löschen und Nickname freigeben', async () => {
 
 test('Branding: Config, Seiten und Farben', async () => {
   const { data } = await call('GET', '/config');
-  assert.equal(data.brand.eventName, 'Maxlan');
-  assert.equal(data.brand.logo, '/brand/logo.svg');
-  assert.equal(data.brand.title, 'Gamefinder · Maxlan');
+  assert.equal(data.brand.eventName, 'Maxlan 33');
+  assert.equal(data.brand.logo, '/brand/logo.png');
+  assert.equal(data.brand.eventStart, '2026-11-06');
+  assert.equal(data.brand.title, 'Gamefinder · Maxlan 33');
 
   const html = await (await fetch(base + '/')).text();
-  assert.match(html, /<title>Gamefinder · Maxlan<\/title>/);
+  assert.match(html, /<title>Gamefinder · Maxlan 33<\/title>/);
   assert.ok(!html.includes('%TITLE%'));
   for (const p of ['/beamer', '/aushang']) {
     const res = await fetch(base + p);
@@ -163,9 +164,9 @@ test('Branding: Config, Seiten und Farben', async () => {
   }
 
   const css = await (await fetch(base + '/brand.css')).text();
-  assert.match(css, /--accent: #ff6a13;/);
+  assert.match(css, /--accent: #a2271f;/);
   assert.match(css, /--surface-2: /);
-  assert.equal((await fetch(base + '/brand/logo.svg')).status, 200);
+  assert.equal((await fetch(base + '/brand/logo.png')).status, 200);
   assert.equal((await fetch(base + '/brand/brand.json')).status, 200);
 });
 
