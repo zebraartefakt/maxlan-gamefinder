@@ -16,6 +16,8 @@ const LIMITS = { nickname: 24, seat: 16, game: 60, description: 300, message: 50
 const ROUND_VISIBLE_AFTER_START_MS = 12 * 60 * 60 * 1000;
 const CHAT_MIN_INTERVAL_MS = 400;
 const BOARD_PAST_MS = 3 * 60 * 60 * 1000;
+const COVER_MAX_BYTES = 4 * 1024 * 1024;
+const steamHeader = (appId) => `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`;
 const COVER_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const HTML_PAGES = { '/': 'index.html', '/index.html': 'index.html', '/beamer': 'beamer.html', '/aushang': 'aushang.html' };
@@ -80,6 +82,7 @@ function createApp({
   brandDir = null,
   adminPassword = '',
   publicBoard = true,
+  autoCacheCovers = false,
   tls = null,
 } = {}) {
   const store = openDatabase(dbFile);
@@ -87,12 +90,22 @@ function createApp({
   const coverDir = path.join(dataDir || fs.mkdtempSync(path.join(os.tmpdir(), 'gamefinder-')), 'covers');
   fs.mkdirSync(coverDir, { recursive: true });
 
-  // Spieleliste aus dem Branding einmalig übernehmen
-  if (!store.getMeta('games_seeded')) {
+  // Spieleliste aus dem Branding übernehmen: bei jeder Änderung von games.json werden
+  // fehlende Spiele ergänzt und fehlende Cover nachgetragen, bestehende Einträge bleiben.
+  const seedHash = crypto.createHash('sha256').update(JSON.stringify(brand.games)).digest('hex');
+  if (store.getMeta('games_seed_hash') !== seedHash) {
+    const existing = new Map(store.listGames().map((g) => [g.name.toLowerCase(), g]));
     for (const g of brand.games) {
-      try { store.createGame(parseGameInput(g)); } catch (e) { console.warn(`games.json: ${g && g.name}: ${e.message}`); }
+      try {
+        const input = parseGameInput({ ...g, cover: g.cover || (g.steamAppId ? steamHeader(Number(g.steamAppId)) : '') });
+        const old = existing.get(input.name.toLowerCase());
+        if (!old) store.createGame(input);
+        else if (!old.cover && input.cover) store.updateGame(old.id, { ...old, cover: input.cover });
+      } catch (e) {
+        console.warn(`games.json: ${g && g.name}: ${e.message}`);
+      }
     }
-    store.setMeta('games_seeded', '1');
+    store.setMeta('games_seed_hash', seedHash);
   }
 
   const pages = {};
@@ -354,6 +367,47 @@ function createApp({
 
   const emitCatalog = () => io.emit('catalog', store.listGames());
 
+  function writeCover(gameId, ext, buffer) {
+    const file = `${gameId}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
+    fs.writeFileSync(path.join(coverDir, file), buffer);
+    return `/covers/${file}`;
+  }
+
+  /**
+   * Lädt Cover, die als http(s)-URL eingetragen sind (z.B. Steam-Logos), herunter und
+   * speichert sie lokal – damit sie auf der LAN auch ohne Internet angezeigt werden.
+   */
+  let caching = null;
+  function cacheRemoteCovers() {
+    if (caching) return caching;
+    caching = (async () => {
+      const result = { cached: [], failed: [] };
+      for (const game of store.listGames().filter((g) => /^https?:\/\//.test(g.cover))) {
+        try {
+          const res = await fetch(game.cover, { signal: AbortSignal.timeout(15000) });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const ext = COVER_TYPES[(res.headers.get('content-type') || '').split(';')[0].trim()];
+          if (!ext) throw new Error('kein unterstütztes Bildformat');
+          const buffer = Buffer.from(await res.arrayBuffer());
+          if (!buffer.length || buffer.length > COVER_MAX_BYTES) throw new Error('Bild leer oder zu groß');
+          const current = store.getGame(game.id);
+          if (!current || current.cover !== game.cover) continue; // zwischenzeitlich geändert
+          store.updateGame(game.id, { ...current, cover: writeCover(game.id, ext, buffer) });
+          result.cached.push(game.name);
+        } catch (e) {
+          result.failed.push({ name: game.name, error: e.cause?.code || e.message });
+        }
+      }
+      if (result.cached.length) emitCatalog();
+      return result;
+    })().finally(() => { caching = null; });
+    return caching;
+  }
+
+  api.post('/admin/games/cache-covers', admin, (_req, res, next) => {
+    cacheRemoteCovers().then((result) => res.json(result)).catch(next);
+  });
+
   api.post('/admin/games', admin, (req, res) => {
     const game = saveGame(() => store.createGame(parseGameInput(req.body)));
     emitCatalog();
@@ -377,14 +431,12 @@ function createApp({
     res.status(204).end();
   });
 
-  api.post('/admin/games/:id/cover', admin, express.raw({ type: 'image/*', limit: '4mb' }), (req, res) => {
+  api.post('/admin/games/:id/cover', admin, express.raw({ type: 'image/*', limit: COVER_MAX_BYTES }), (req, res) => {
     const game = loadGame(req);
     const ext = COVER_TYPES[req.get('content-type')];
     if (!ext) throw new HttpError(400, 'Bitte ein PNG-, JPG-, WebP- oder GIF-Bild hochladen.');
     if (!Buffer.isBuffer(req.body) || !req.body.length) throw new HttpError(400, 'Leere Datei.');
-    const file = `${game.id}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
-    fs.writeFileSync(path.join(coverDir, file), req.body);
-    const updated = store.updateGame(game.id, { ...game, cover: `/covers/${file}` });
+    const updated = store.updateGame(game.id, { ...game, cover: writeCover(game.id, ext, req.body) });
     removeCoverFile(game.cover);
     emitCatalog();
     res.json({ game: updated });
@@ -431,7 +483,15 @@ function createApp({
     });
   });
 
-  return { app, server, io, store };
+  if (autoCacheCovers) {
+    setImmediate(() => cacheRemoteCovers().then(({ cached, failed }) => {
+      if (cached.length || failed.length) {
+        console.log(`Cover lokal gespeichert: ${cached.length}, nicht erreichbar: ${failed.length}`);
+      }
+    }));
+  }
+
+  return { app, server, io, store, cacheRemoteCovers };
 }
 
 module.exports = { createApp };
@@ -452,6 +512,7 @@ if (require.main === module) {
     brandDir,
     adminPassword: process.env.ADMIN_PASSWORD || '',
     publicBoard: process.env.PUBLIC_BOARD !== 'false',
+    autoCacheCovers: process.env.CACHE_COVERS !== 'false',
     tls,
   });
   server.listen(port, host, () => {

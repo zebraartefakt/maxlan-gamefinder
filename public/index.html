@@ -128,11 +128,15 @@
         <h2 id="edit-title">Runde ankündigen</h2>
         <button type="button" class="icon-btn" data-close aria-label="Schließen">✕</button>
       </div>
-      <div class="catalog-pick" id="catalog-pick"></div>
-      <label>Spiel
-        <input name="game" required maxlength="60" list="game-suggestions" placeholder="z.B. FlatOut 2" autocomplete="off">
-      </label>
-      <datalist id="game-suggestions"></datalist>
+      <div class="field">
+        <label for="game-input">Spiel</label>
+        <div class="combo" id="game-combo">
+          <img class="combo-cover" id="game-cover" alt="" hidden>
+          <input id="game-input" name="game" required maxlength="60" placeholder="Spiel suchen oder eintippen …"
+                 autocomplete="off" role="combobox" aria-expanded="false" aria-controls="game-list" aria-autocomplete="list">
+          <ul class="combo-list" id="game-list" role="listbox" hidden></ul>
+        </div>
+      </div>
       <div class="row">
         <label>Tag
           <select name="day" id="edit-day"></select>
@@ -224,7 +228,9 @@
       <h2>Spiele verwalten</h2>
       <button class="icon-btn" data-close aria-label="Schließen">✕</button>
     </div>
-    <p class="muted small">Diese Spiele werden beim Ankündigen einer Runde vorgeschlagen. Die Spielerzahl wird automatisch vorausgefüllt.</p>
+    <p class="muted small">Diese Spiele werden beim Ankündigen einer Runde vorgeschlagen. Die Spielerzahl wird automatisch vorausgefüllt.
+      Logos, die als Adresse hinterlegt sind (z.B. von Steam), speichert der Server lokal, damit sie auf der LAN auch ohne Internet funktionieren.</p>
+    <button type="button" class="btn" id="cache-covers">Logos herunterladen</button>
     <form id="game-form" class="game-form">
       <input name="name" required maxlength="60" placeholder="Spielname">
       <input name="maxPlayers" type="number" min="2" max="256" placeholder="Max.">

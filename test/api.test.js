@@ -191,11 +191,11 @@ test('Spieleliste: aus games.json übernommen und per Admin verwaltbar', async (
   const flatout = data.catalog.find((g) => g.name === 'FlatOut 2');
   assert.equal(flatout.maxPlayers, 8);
 
-  assert.equal((await call('POST', '/admin/games', { body: { name: 'Quake III Arena' } })).status, 403);
-  const created = await call('POST', '/admin/games', { admin: 'geheim', body: { name: 'Quake III Arena', maxPlayers: 16 } });
+  assert.equal((await call('POST', '/admin/games', { body: { name: 'Serious Sam' } })).status, 403);
+  const created = await call('POST', '/admin/games', { admin: 'geheim', body: { name: 'Serious Sam', maxPlayers: 16 } });
   assert.equal(created.status, 201);
   const id = created.data.game.id;
-  assert.equal((await call('POST', '/admin/games', { admin: 'geheim', body: { name: 'quake iii arena' } })).status, 409);
+  assert.equal((await call('POST', '/admin/games', { admin: 'geheim', body: { name: 'serious sam' } })).status, 409);
   const bad = await call('PATCH', `/admin/games/${id}`, { admin: 'geheim', body: { cover: 'javascript:alert(1)' } });
   assert.equal(bad.status, 400);
 
@@ -217,4 +217,42 @@ test('Spieleliste: aus games.json übernommen und per Admin verwaltbar', async (
 
   assert.equal((await call('DELETE', `/admin/games/${id}`, { admin: 'geheim' })).status, 204);
   assert.equal((await fetch(base + game.cover)).status, 404);
+});
+
+test('Logos von einer URL werden lokal gespeichert', async () => {
+  const http = require('node:http');
+  const png = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000' + '1f15c4890000000d49444154789c6360000002000154a24f5d0000000049454e44ae426082', 'hex');
+  const imgServer = http.createServer((req, res) => {
+    if (req.url === '/logo.png') { res.writeHead(200, { 'content-type': 'image/png' }); res.end(png); }
+    else { res.writeHead(404); res.end(); }
+  });
+  await new Promise((r) => imgServer.listen(0, '127.0.0.1', r));
+  const origin = `http://127.0.0.1:${imgServer.address().port}`;
+  try {
+    const ok = (await call('POST', '/admin/games', { admin: 'geheim', body: { name: 'Logo-Test', cover: `${origin}/logo.png` } })).data.game;
+    const bad = (await call('POST', '/admin/games', { admin: 'geheim', body: { name: 'Logo-Kaputt', cover: `${origin}/fehlt.png` } })).data.game;
+
+    const { status, data } = await call('POST', '/admin/games/cache-covers', { admin: 'geheim' });
+    assert.equal(status, 200);
+    assert.ok(data.cached.includes('Logo-Test'));
+    assert.ok(data.failed.some((f) => f.name === 'Logo-Kaputt'));
+
+    const t = await login('LogoFan');
+    const catalog = (await call('GET', '/games', { token: t })).data.catalog;
+    const cover = catalog.find((g) => g.id === ok.id).cover;
+    assert.match(cover, /^\/covers\//);
+    assert.equal((await fetch(base + cover)).status, 200);
+    assert.equal(catalog.find((g) => g.id === bad.id).cover, `${origin}/fehlt.png`);
+  } finally {
+    imgServer.close();
+  }
+});
+
+test('Spieleliste: Steam-IDs werden zu Cover-Adressen, neue Spiele werden ergänzt', async () => {
+  const t = await login('Steamer');
+  const catalog = (await call('GET', '/games', { token: t })).data.catalog;
+  const cs2 = catalog.find((g) => g.name === 'Counter-Strike 2');
+  assert.equal(cs2.cover, 'https://cdn.cloudflare.steamstatic.com/steam/apps/730/header.jpg');
+  assert.equal(catalog.find((g) => g.name === 'Warcraft III').cover, '');
+  assert.ok(catalog.length >= 30);
 });
