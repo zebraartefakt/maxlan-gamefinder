@@ -27,9 +27,9 @@
     .clock span { color: var(--muted); }
 
     .main { display: grid; grid-template-columns: 1fr 17em; gap: 2em; min-height: 0; }
-    .rounds { display: grid; grid-template-columns: repeat(2, 1fr); grid-auto-rows: min-content; gap: 1em; align-content: start; min-height: 0; }
+    .rounds { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: min-content; gap: 1em; align-content: start; min-height: 0; }
     .round-tile {
-      display: grid; grid-template-columns: 9em 1fr; gap: 1em; align-items: center;
+      display: grid; grid-template-columns: 9em minmax(0, 1fr); gap: 1em; align-items: center;
       background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: .9em;
       animation: fade .5s ease-out;
     }
@@ -41,8 +41,8 @@
       background: color-mix(in srgb, var(--accent) 20%, var(--surface-2)); color: var(--accent-2);
     }
     .tile-body { min-width: 0; display: grid; gap: .25em; }
-    .tile-top { display: flex; align-items: baseline; gap: .6em; }
-    .tile-top h2 { font-size: 1.45em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tile-top { min-width: 0; display: grid; gap: .1em; }
+    .tile-top h2 { min-width: 0; font-size: 1.45em; line-height: 1.15; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
     .tile-time { font-size: 1.3em; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--accent-2); white-space: nowrap; }
     .tile-meta { color: var(--muted); display: flex; gap: .8em; flex-wrap: wrap; align-items: center; }
     .free { background: var(--ok); color: #06140e; font-weight: 800; border-radius: 6px; padding: .05em .5em; }
@@ -96,7 +96,7 @@
   <script>
     (async () => {
       const $ = (s) => document.querySelector(s);
-      const PAGE_SIZE = 8;
+      const PAGE_SIZE = 6;
       const PAGE_SECONDS = 12;
       const RUNNING_VISIBLE_MS = 60 * 60 * 1000;
       const fmtTime = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit' });
@@ -121,6 +121,11 @@
         return n;
       }
 
+      function initials(name) {
+        const words = name.split(/[\s\-:–]+/).filter((w) => /^\p{Lu}/u.test(w));
+        return (words.length >= 2 ? words.slice(0, 2).map((w) => w[0]).join('') : name.replace(/\s+/g, '').slice(0, 2)).toUpperCase();
+      }
+
       function relative(ts, now) {
         const min = Math.round((ts - now) / 60000);
         if (min <= 0) return min > -2 ? 'jetzt' : `läuft seit ${-min} min`;
@@ -137,7 +142,7 @@
         const cover = covers.get(r.game.toLowerCase());
         let c;
         if (cover) { c = el('img', 'tile-cover'); c.src = cover; c.alt = ''; }
-        else c = el('div', 'tile-cover', r.game.slice(0, 2));
+        else c = el('div', 'tile-cover', initials(r.game));
         const body = el('div', 'tile-body');
         const top = el('div', 'tile-top');
         const sameDay = new Date(r.startsAt).toDateString() === new Date(now).toDateString();
