@@ -144,35 +144,87 @@
         return `in ${Math.floor(min / 60)} h ${min % 60 ? `${min % 60} min` : ''}`.trim();
       }
 
-      function tile(r, now, covers) {
-        const t = el('article', 'round-tile');
-        const soon = r.startsAt > now && r.startsAt - now < 30 * 60000;
-        if (soon) t.classList.add('soon');
-        if (r.startsAt <= now) t.classList.add('running');
-        const cover = covers.get(r.game.toLowerCase());
-        let c;
-        if (cover) { c = el('img', 'tile-cover'); c.src = cover; c.alt = ''; }
-        else c = el('div', 'tile-cover', initials(r.game));
-        const body = el('div', 'tile-body');
-        const top = el('div', 'tile-top');
-        const sameDay = new Date(r.startsAt).toDateString() === new Date(now).toDateString();
+      // Kacheln werden einmal gebaut und danach nur dort aktualisiert, wo sich etwas ändert.
+      // Ein kompletter Neuaufbau alle 10 Sekunden hat vorher die Logos kurz verschwinden lassen (Flackern).
+      const tiles = new Map(); // Runden-ID → { node, parts, coverUrl, game }
+      const titles = { up: el('div', 'section-title', 'Demnächst'), run: el('div', 'section-title', 'Läuft gerade') };
+      const emptyNode = el('div', 'empty-board');
+      emptyNode.append(el('strong', '', 'Noch keine Runden geplant'), 'Scanne den QR-Code und kündige die erste an!');
+
+      function setText(node, text) {
+        if (node.textContent !== text) node.textContent = text;
+      }
+
+      function buildTile(r, coverUrl) {
+        const node = el('article', 'round-tile');
+        let cover;
+        if (coverUrl) { cover = el('img', 'tile-cover'); cover.src = coverUrl; cover.alt = ''; }
+        else cover = el('div', 'tile-cover', initials(r.game));
+        const parts = {
+          time: el('span', 'tile-time'),
+          mode: el('span', 'tile-mode'),
+          game: el('h2', ''),
+          relative: el('span', ''),
+          players: el('span', ''),
+          status: el('span', ''),
+          names: el('div', 'names'),
+        };
         const when = el('div', 'tile-when');
-        when.append(el('span', 'tile-time', `${sameDay ? '' : `${fmtDay.format(r.startsAt)} `}${fmtTime.format(r.startsAt)}`));
-        if (r.mode) when.append(el('span', 'tile-mode', r.mode));
-        top.append(when, el('h2', '', r.game));
+        when.append(parts.time, parts.mode);
+        const top = el('div', 'tile-top');
+        top.append(when, parts.game);
         const meta = el('div', 'tile-meta');
-        meta.append(el('span', '', relative(r.startsAt, now)));
-        meta.append(el('span', '', `👥 ${r.players.length}${r.maxPlayers ? `/${r.maxPlayers}` : ''}`));
+        meta.append(parts.relative, parts.players, parts.status);
+        const body = el('div', 'tile-body');
+        body.append(top, meta, parts.names);
+        node.append(cover, body);
+        return { node, parts, coverUrl, game: r.game };
+      }
+
+      function tileFor(r, now, covers) {
+        const coverUrl = covers.get(r.game.toLowerCase()) || '';
+        let t = tiles.get(r.id);
+        if (!t || t.coverUrl !== coverUrl || t.game !== r.game) {
+          const fresh = buildTile(r, coverUrl);
+          if (t && t.node.isConnected) t.node.replaceWith(fresh.node);
+          t = fresh;
+          tiles.set(r.id, t);
+        }
+        const { node, parts } = t;
+        node.classList.toggle('soon', r.startsAt > now && r.startsAt - now < 30 * 60000);
+        node.classList.toggle('running', r.startsAt <= now);
+        const sameDay = new Date(r.startsAt).toDateString() === new Date(now).toDateString();
+        setText(parts.time, `${sameDay ? '' : `${fmtDay.format(r.startsAt)} `}${fmtTime.format(r.startsAt)}`);
+        setText(parts.mode, r.mode || '');
+        parts.mode.hidden = !r.mode;
+        setText(parts.game, r.game);
+        setText(parts.relative, relative(r.startsAt, now));
+        setText(parts.players, `👥 ${r.players.length}${r.maxPlayers ? `/${r.maxPlayers}` : ''}`);
+        let status = 'Offen für alle';
+        let statusClass = 'free';
         if (r.maxPlayers) {
           const free = r.maxPlayers - r.players.length;
-          meta.append(free > 0 ? el('span', 'free', `Noch ${free} ${free === 1 ? 'Platz' : 'Plätze'} frei`) : el('span', 'full', r.waitlist ? `Voll · ${r.waitlist} wartend` : 'Voll'));
-        } else {
-          meta.append(el('span', 'free', 'Offen für alle'));
+          if (free > 0) status = `Noch ${free} ${free === 1 ? 'Platz' : 'Plätze'} frei`;
+          else { status = r.waitlist ? `Voll · ${r.waitlist} wartend` : 'Voll'; statusClass = 'full'; }
         }
-        body.append(top, meta, el('div', 'names', r.players.join(' · ')));
-        t.append(c, body);
-        return t;
+        setText(parts.status, status);
+        if (parts.status.className !== statusClass) parts.status.className = statusClass;
+        setText(parts.names, r.players.join(' · '));
+        return node;
       }
+
+      /** Knoten (Abschnittstitel + Kacheln) für die Runden items[from..to) */
+      function pageNodes(items, from, to, nodes) {
+        const out = [];
+        let last = null;
+        for (let i = from; i < to; i++) {
+          if (items[i][0] !== last) { out.push(titles[items[i][0]]); last = items[i][0]; }
+          out.push(nodes[i]);
+        }
+        return out;
+      }
+
+      let shownCount = 0; // Anzahl der Runden auf der aktuellen Seite
 
       /** @param {boolean} pageChange nur beim Umblättern einblenden, nicht bei jeder Datenaktualisierung */
       function render(pageChange = false) {
@@ -188,36 +240,52 @@
         itemCount = items.length;
         if (pageStart >= items.length) pageStart = 0;
 
-        $('#stat-online').textContent = board.online;
-        $('#stat-rounds').textContent = upcoming.length;
+        setText($('#stat-online'), String(board.online));
+        setText($('#stat-rounds'), String(upcoming.length));
 
-        box.replaceChildren();
+        const ids = new Set(items.map(([, r]) => r.id));
+        for (const id of tiles.keys()) if (!ids.has(id)) tiles.delete(id);
+
         if (!items.length) {
-          const e = el('div', 'empty-board');
-          e.append(el('strong', '', 'Noch keine Runden geplant'), 'Scanne den QR-Code und kündige die erste an!');
-          box.append(e);
+          if (box.firstChild !== emptyNode || box.childNodes.length !== 1) box.replaceChildren(emptyNode);
           nextStart = 0;
-          $('#pager').textContent = '';
+          shownCount = 0;
+          setText($('#pager'), '');
           return;
         }
-        let last = null;
-        let shown = 0;
-        nextStart = items.length;
-        for (let i = pageStart; i < items.length; i++) {
-          const [kind, r] = items[i];
-          const added = [];
-          if (kind !== last) added.push(box.appendChild(el('div', 'section-title', kind === 'up' ? 'Demnächst' : 'Läuft gerade')));
-          added.push(box.appendChild(tile(r, now, covers)));
-          if (shown > 0 && box.scrollHeight > box.clientHeight + 1) {
-            added.forEach((n) => n.remove());
-            nextStart = i;
-            break;
+
+        // Alle Kacheln aktualisieren (nur geänderte Texte werden angefasst)
+        const nodes = items.map(([, r]) => tileFor(r, now, covers));
+
+        // Schnellweg: gleiche Runden in gleicher Reihenfolge wie bisher, alles passt → DOM bleibt, wie es ist
+        const end = Math.min(pageStart + shownCount, items.length);
+        const expected = pageNodes(items, pageStart, end, nodes);
+        const current = [...box.children];
+        const same = !pageChange && shownCount > 0 && expected.length === current.length && expected.every((n, i) => n === current[i]);
+        const fits = box.scrollHeight <= box.clientHeight + 1;
+        const complete = end === items.length || nextStart === end; // nichts Neues, das noch passen könnte
+        if (!(same && fits && complete)) {
+          // Neu anordnen: Kacheln nacheinander einsetzen, bis der Platz voll ist (vorhandene Knoten werden wiederverwendet)
+          box.replaceChildren();
+          let last = null;
+          shownCount = 0;
+          nextStart = items.length;
+          for (let i = pageStart; i < items.length; i++) {
+            const [kind] = items[i];
+            const added = [];
+            if (kind !== last) added.push(box.appendChild(titles[kind]));
+            added.push(box.appendChild(nodes[i]));
+            if (shownCount > 0 && box.scrollHeight > box.clientHeight + 1) {
+              added.forEach((n) => n.remove());
+              nextStart = i;
+              break;
+            }
+            last = kind;
+            shownCount++;
           }
-          last = kind;
-          shown++;
         }
         const paged = pageStart > 0 || nextStart < items.length;
-        $('#pager').textContent = paged ? `Runden ${pageStart + 1}–${nextStart} von ${items.length}` : '';
+        setText($('#pager'), paged ? `Runden ${pageStart + 1}–${nextStart} von ${items.length}` : '');
       }
 
       async function load() {
