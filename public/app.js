@@ -34,6 +34,8 @@
     me: null,
     config: { adminEnabled: false, publicBoard: true, brand: { title: document.title } },
     catalog: [],
+    gameHistory: [],
+    combo: { items: [], index: -1 },
     rounds: new Map(),
     users: new Map(),
     online: new Set(),
@@ -138,9 +140,24 @@
     return state.catalog.find((g) => g.name.toLowerCase() === n) || null;
   }
 
+  /** "Age of Empires II" → "AE", "Counter-Strike 2" → "CS": Anfangsbuchstaben der großgeschriebenen Wörter */
+  function initials(name) {
+    const words = name.split(/[\s\-:–]+/).filter((w) => /^\p{Lu}/u.test(w));
+    return (words.length >= 2 ? words.slice(0, 2).map((w) => w[0]).join('') : name.replace(/\s+/g, '').slice(0, 2)).toUpperCase();
+  }
+
+  /** Cover-Bild; fällt auf Initialen zurück, wenn kein Cover da ist oder es nicht lädt. */
+  function gameIcon(game, cls) {
+    const fallback = () => el('span', { class: `${cls} initials` }, initials(game.name));
+    if (!game.cover) return fallback();
+    const img = el('img', { class: cls, src: game.cover, alt: '', loading: 'lazy' });
+    img.addEventListener('error', () => img.replaceWith(fallback()), { once: true });
+    return img;
+  }
+
   function coverImg(name, cls = 'cover thumb') {
     const g = catalogEntry(name);
-    return g && g.cover ? el('img', { class: cls, src: g.cover, alt: '', loading: 'lazy' }) : null;
+    return g && g.cover ? gameIcon(g, cls) : null;
   }
 
   function nick(user, { seat = false } = {}) {
@@ -391,35 +408,100 @@
       }
       setFormTime(next.getTime());
     }
-    renderCatalogPick();
+    closeCombo();
+    updateGameCover();
     $('#edit-dialog').showModal();
     api('GET', '/games').then(({ games, catalog }) => {
       state.catalog = catalog;
-      renderCatalogPick();
-      const names = new Map([...catalog.map((g) => g.name), ...games].map((g) => [g.toLowerCase(), g]));
-      $('#game-suggestions').replaceChildren(...[...names.values()].map((g) => el('option', { value: g })));
+      state.gameHistory = games;
+      updateGameCover();
     }).catch(() => {});
   }
 
-  function pickGame(g) {
-    const form = $('#edit-form');
-    form.game.value = g.name;
-    if (g.maxPlayers) form.maxPlayers.value = g.maxPlayers;
-    renderCatalogPick();
+  // ---- Spielauswahl (Combobox) --------------------------------------------
+
+  const gameInput = () => $('#game-input');
+  const comboOpen = () => !$('#game-list').hidden;
+
+  /** Spieleliste + frei eingetippte Spiele aus früheren Runden, gefiltert nach Eingabe. */
+  function comboOptions(query) {
+    const q = query.trim().toLowerCase();
+    const known = new Set(state.catalog.map((g) => g.name.toLowerCase()));
+    const all = [
+      ...state.catalog,
+      ...state.gameHistory.filter((n) => !known.has(n.toLowerCase())).map((name) => ({ name, maxPlayers: null, cover: '' })),
+    ];
+    if (!q) return all;
+    const hits = all.filter((g) => g.name.toLowerCase().includes(q));
+    return [...hits.filter((g) => g.name.toLowerCase().startsWith(q)), ...hits.filter((g) => !g.name.toLowerCase().startsWith(q))];
   }
 
-  function renderCatalogPick() {
-    const box = $('#catalog-pick');
-    const current = $('#edit-form').game.value.trim().toLowerCase();
-    box.hidden = !state.catalog.length || state.editingRoundId !== null;
-    box.replaceChildren(...state.catalog.map((g) => el('button', {
-      type: 'button',
-      class: `pick${g.name.toLowerCase() === current ? ' active' : ''}`,
-      title: g.maxPlayers ? `${g.name} (max. ${g.maxPlayers})` : g.name,
-      onclick: () => pickGame(g),
+  function renderCombo() {
+    const list = $('#game-list');
+    const items = comboOptions(gameInput().value);
+    state.combo.items = items;
+    state.combo.index = Math.min(state.combo.index, items.length - 1);
+    if (!items.length) return closeCombo();
+    list.replaceChildren(...items.map((g, i) => el('li', {
+      role: 'option',
+      id: `game-opt-${i}`,
+      class: i === state.combo.index ? 'active' : null,
+      'aria-selected': i === state.combo.index ? 'true' : 'false',
+      onmousedown: (e) => { e.preventDefault(); selectGame(g); },
     },
-    g.cover ? el('img', { src: g.cover, alt: '', loading: 'lazy' }) : el('span', { class: 'pick-initial' }, g.name.slice(0, 2)),
-    el('span', { class: 'pick-name' }, g.name))));
+    gameIcon(g, 'combo-icon'),
+    el('span', { class: 'combo-name' }, g.name),
+    g.maxPlayers ? el('span', { class: 'combo-max' }, `max. ${g.maxPlayers}`) : null)));
+    list.hidden = false;
+    gameInput().setAttribute('aria-expanded', 'true');
+    const active = state.combo.index >= 0 ? list.children[state.combo.index] : null;
+    gameInput().setAttribute('aria-activedescendant', active ? active.id : '');
+    if (active) active.scrollIntoView({ block: 'nearest' });
+  }
+
+  function closeCombo() {
+    $('#game-list').hidden = true;
+    state.combo.index = -1;
+    gameInput().setAttribute('aria-expanded', 'false');
+    gameInput().removeAttribute('aria-activedescendant');
+  }
+
+  function selectGame(g) {
+    const form = $('#edit-form');
+    gameInput().value = g.name;
+    if (g.maxPlayers) form.maxPlayers.value = g.maxPlayers;
+    closeCombo();
+    updateGameCover();
+  }
+
+  /** Zeigt das Cover des gewählten Spiels klein im Eingabefeld. */
+  function updateGameCover() {
+    const g = catalogEntry(gameInput().value);
+    const img = $('#game-cover');
+    const show = Boolean(g && g.cover);
+    img.hidden = !show;
+    $('#game-combo').classList.toggle('has-cover', show);
+    if (show && img.getAttribute('src') !== g.cover) img.src = g.cover;
+  }
+
+  function onComboKey(e) {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!comboOpen()) { state.combo.index = -1; renderCombo(); }
+      if (!state.combo.items.length) return;
+      const n = state.combo.items.length;
+      const i = state.combo.index;
+      if (e.key === 'ArrowDown') state.combo.index = i < 0 ? 0 : (i + 1) % n;
+      else state.combo.index = i < 0 ? n - 1 : (i - 1 + n) % n;
+      renderCombo();
+    } else if (e.key === 'Enter' && comboOpen() && state.combo.index >= 0) {
+      e.preventDefault();
+      selectGame(state.combo.items[state.combo.index]);
+    } else if (e.key === 'Escape' && comboOpen()) {
+      e.preventDefault();
+      e.stopPropagation();
+      closeCombo();
+    }
   }
 
   async function submitEdit(e) {
@@ -947,7 +1029,7 @@
           class: 'cover-slot',
           title: 'Cover hochladen',
           onclick: () => { coverTarget = g.id; $('#cover-file').click(); },
-        }, g.cover ? el('img', { src: g.cover, alt: '' }) : el('span', {}, '＋ Cover')),
+        }, g.cover ? gameIcon(g, 'slot-img') : el('span', {}, '＋ Cover')),
         el('div', { class: 'game-admin-fields' },
           el('input', { value: g.name, maxlength: 60, 'aria-label': 'Name', onchange: save('name') }),
           el('div', { class: 'row' },
@@ -960,6 +1042,22 @@
           onclick: () => confirm(`„${g.name}“ aus der Liste entfernen?`) && adminGame('DELETE', `/admin/games/${g.id}`),
         }, '🗑'));
     }));
+  }
+
+  async function cacheCovers() {
+    const btn = $('#cache-covers');
+    btn.disabled = true;
+    btn.textContent = 'Lade Logos …';
+    try {
+      const { cached, failed } = await api('POST', '/admin/games/cache-covers');
+      if (!cached.length && !failed.length) toast('Alle Logos sind bereits lokal gespeichert.');
+      else toast(`${cached.length} Logos gespeichert${failed.length ? `, ${failed.length} nicht erreichbar (kein Internet?)` : ''}.`, failed.length ? 'error' : 'info');
+    } catch (e) {
+      toast(e.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Logos herunterladen';
+    }
   }
 
   async function openGamesAdmin() {
@@ -1053,6 +1151,8 @@
   for (const b of $$('.tab')) b.addEventListener('click', () => switchTab(b.dataset.tab));
   $('#new-round').addEventListener('click', () => openEditDialog());
   $('#manage-games').addEventListener('click', openGamesAdmin);
+  $('#cache-covers').addEventListener('click', cacheCovers);
+  $('#rd-cover').addEventListener('error', () => { $('#rd-cover').hidden = true; });
   $('#game-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = e.target;
@@ -1066,11 +1166,24 @@
     e.target.value = '';
     if (file && coverTarget !== null) uploadCover(file);
   });
-  $('#edit-form').game.addEventListener('input', (e) => {
+  gameInput().addEventListener('input', (e) => {
     const g = catalogEntry(e.target.value);
     const form = $('#edit-form');
     if (g && g.maxPlayers && !form.maxPlayers.value) form.maxPlayers.value = g.maxPlayers;
-    renderCatalogPick();
+    state.combo.index = -1;
+    renderCombo();
+    updateGameCover();
+  });
+  gameInput().addEventListener('focus', () => renderCombo());
+  gameInput().addEventListener('click', () => { if (!comboOpen()) renderCombo(); });
+  gameInput().addEventListener('blur', () => closeCombo());
+  gameInput().addEventListener('keydown', onComboKey);
+  $('#game-cover').addEventListener('error', () => {
+    $('#game-cover').hidden = true;
+    $('#game-combo').classList.remove('has-cover');
+  });
+  $('#edit-dialog').addEventListener('cancel', (e) => {
+    if (comboOpen()) { e.preventDefault(); closeCombo(); }
   });
   $('#round-filter').addEventListener('input', renderRounds);
   $('#only-mine').addEventListener('change', renderRounds);

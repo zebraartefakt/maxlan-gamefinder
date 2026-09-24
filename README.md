@@ -6,7 +6,7 @@ Mitspieler finden auf der LAN-Party: Teilnehmer kündigen Spielrunden an (z.B. �
 
 - **Anmeldung nur mit Nickname**, optional mit Sitzplatz, ohne Passwort. Über den **Geräte-Code** (unter *Profil & Einstellungen*) nutzt man denselben Nickname auch auf dem Handy.
 - **Runden ankündigen**:
-  - Spiel aus der **Spieleliste mit Covern** wählen (die Spielerzahl wird vorausgefüllt) oder frei eintippen
+  - Spiel aus der **Spieleliste mit Logos** wählen oder frei eintippen. Die Auswahlliste filtert beim Tippen, lässt sich per Pfeiltasten bedienen und füllt die Spielerzahl vor. Mitgeliefert sind 36 typische LAN-Spiele
   - Tag (die **Event-Tage** aus dem Branding) und Uhrzeit, mit Schnellwahl „jetzt / in 15 min / …“
   - optional **Max. Spieler** und eine Beschreibung
 - **Beitreten und Verlassen.** Ist die Runde voll, kommt man auf die **Warteliste** und rückt automatisch nach, sobald ein Platz frei wird.
@@ -57,6 +57,7 @@ npm start
 | `PUBLIC_URL`          | *(Adresse im Browser)*    | Adresse für QR-Codes, Aushang und Beamer. Überschreibt `publicUrl` |
 | `ADMIN_PASSWORD`      | *(leer)*                  | Passwort für den Admin-Modus. Leer = deaktiviert                   |
 | `PUBLIC_BOARD`        | `true`                    | `false` deaktiviert die Beamer-Ansicht ohne Login                  |
+| `CACHE_COVERS`        | `true`                    | Logos mit http(s)-Adresse beim Start lokal speichern               |
 | `PORT` / `HOST`       | `3000` / `0.0.0.0`        | Port und Bind-Adresse                                              |
 | `DATA_DIR`            | `./data`                  | Ordner für Datenbank und hochgeladene Cover                        |
 | `DB_FILE`             | `$DATA_DIR/gamefinder.db` | Pfad zur Datenbank                                                 |
@@ -101,7 +102,15 @@ brands/maxlan/
 - **Logo**: Es erscheint auf der Anmeldeseite, in der Kopfzeile, auf dem Aushang und in der Beamer-Ansicht, immer auf dunklem Hintergrund (`bg`).
 - **Event-Tage** (`eventStart`/`eventEnd`): Beim Ankündigen stehen nur diese Tage zur Auswahl. Ohne Angabe sind es die nächsten 5 Tage.
 - **Farben**: `accent` ist die Markenfarbe für Buttons, Hervorhebungen und den Beamer-Glow. `accent2` ist eine hellere Variante für Text und Links, damit sie auf dunklem Grund lesbar bleiben.
-- **games.json**: Eine Liste von `{ "name": "...", "maxPlayers": 8, "cover": "/brand/covers/datei.jpg" }`. Sie wird nur beim allerersten Start in die Datenbank übernommen und danach im Admin-Modus gepflegt. Cover gehen auch als `https://…`-URL; im LAN ohne Internet sind lokale Dateien aber sicherer.
+- **games.json**: Eine Liste von `{ "name": "...", "maxPlayers": 8, "steamAppId": 730 }`.
+  - Statt `steamAppId` geht auch `"cover": "/brand/covers/datei.jpg"` oder eine `https://…`-Adresse.
+  - Ändert sich die Datei, ergänzt der Server beim nächsten Start fehlende Spiele und fehlende Logos. Was im Admin-Modus geändert wurde, bleibt erhalten.
+
+### Spiele-Logos
+
+Bei Spielen mit `steamAppId` wird das Steam-Headerbild als Logo verwendet. Der Server lädt alle Logos, die als Internet-Adresse hinterlegt sind, **beim Start herunter und speichert sie lokal** (`DATA_DIR/covers`). So funktionieren sie auf der LAN auch ohne Internet.
+
+Den Server also einmal **vor** der Veranstaltung mit Internetzugang starten, oder im Admin-Modus unter *Spiele verwalten → Logos herunterladen* nachholen. Muss der Server über einen HTTP-Proxy ins Internet, zusätzlich `NODE_USE_ENV_PROXY=1` setzen. Spiele ohne Logo zeigen ihre Initialen. Eigene Logos lassen sich im Admin-Modus hochladen.
 
 Für eine neue Veranstaltung den Ordner kopieren, anpassen und `BRAND_DIR` darauf zeigen lassen.
 
