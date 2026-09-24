@@ -105,7 +105,8 @@
   <script>
     (async () => {
       const $ = (s) => document.querySelector(s);
-      const PAGE_SECONDS = 12;
+      // Höchstens zwei Seiten: Seite 1 (die nächsten Runden) länger, Seite 2 kürzer
+      const PAGE_MS = [30000, 10000];
       const RUNNING_VISIBLE_MS = 60 * 60 * 1000;
       const fmtTime = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit' });
       const fmtDate = new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: '2-digit', month: 'long' });
@@ -123,6 +124,7 @@
       let pageStart = 0; // Index der ersten Runde auf der aktuellen Seite
       let nextStart = 0; // Index der ersten Runde, die nicht mehr gepasst hat
       let itemCount = 0;
+      let page = 0; // 0 = Seite 1, 1 = Seite 2
       let offset = 0; // Serverzeit - lokale Zeit
       let loadedVersion = version; // Version, mit der diese Seite geladen wurde
 
@@ -252,7 +254,7 @@
           .sort((a, b) => b.startsAt - a.startsAt);
         const items = [...upcoming.map((r) => ['up', r]), ...running.map((r) => ['run', r])];
         itemCount = items.length;
-        if (pageStart >= items.length) pageStart = 0;
+        if (pageStart >= items.length) { pageStart = 0; page = 0; }
 
         setText($('#stat-online'), String(board.online));
         setText($('#stat-rounds'), String(upcoming.length));
@@ -299,7 +301,10 @@
           }
         }
         const paged = pageStart > 0 || nextStart < items.length;
-        setText($('#pager'), paged ? `Runden ${pageStart + 1}–${nextStart} von ${items.length}` : '');
+        const hidden = page === 1 ? items.length - nextStart : 0; // passt auch auf Seite 2 nicht mehr
+        setText($('#pager'), paged
+          ? `Seite ${page + 1} von 2${hidden > 0 ? ` · ${hidden} weitere ${hidden === 1 ? 'Runde' : 'Runden'} in der App` : ''}`
+          : '');
       }
 
       async function load() {
@@ -331,11 +336,22 @@
       tick();
       setInterval(load, 10000);
       setInterval(tick, 1000);
-      setInterval(() => {
-        if (!board || (pageStart === 0 && nextStart >= itemCount)) return; // alles passt auf eine Seite
-        pageStart = nextStart;
-        render(true);
-      }, PAGE_SECONDS * 1000);
+      function flipPage() {
+        if (board) {
+          if (page === 0 && nextStart < itemCount) {
+            // weiter zu Seite 2 – nur, wenn Seite 1 nicht alles zeigt
+            page = 1;
+            pageStart = nextStart;
+            render(true);
+          } else if (page === 1) {
+            page = 0;
+            pageStart = 0;
+            render(true);
+          }
+        }
+        setTimeout(flipPage, PAGE_MS[page]);
+      }
+      setTimeout(flipPage, PAGE_MS[0]);
       // Neu messen, sobald sich der verfügbare Platz ändert (Fenstergröße, nachgeladenes Logo …)
       new ResizeObserver(() => render()).observe($('#rounds'));
 

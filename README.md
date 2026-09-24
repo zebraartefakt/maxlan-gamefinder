@@ -25,7 +25,7 @@ Mitspieler finden auf der LAN-Party: Teilnehmer kündigen Spielrunden an (z.B. �
 - **Aushang** (`/aushang`): eine druckfertige A4-Seite mit Logo, großem QR-Code und kurzer Anleitung zum Auslegen auf den Tischen.
 - **Beamer-Ansicht** (`/beamer`): eine Vollbild-Übersicht der nächsten Runden mit Spielmodus, freien Plätzen, Uhrzeit, QR-Code und Anzahl der Spieler online.
   - Sie aktualisiert sich alle 10 Sekunden und lädt sich nach einem Server-Update selbst neu.
-  - Pro Seite zeigt sie so viele Runden, wie auf den Bildschirm passen, und blättert bei mehr automatisch weiter. Ein Klick schaltet den Vollbildmodus um. Die Ansicht braucht keinen Login.
+  - Pro Seite zeigt sie so viele Runden, wie auf den Bildschirm passen. Bei mehr Runden gibt es höchstens eine zweite Seite: Seite 1 steht 30 Sekunden, Seite 2 zehn Sekunden. Was auch dort nicht mehr passt, wird als „X weitere Runden in der App“ angezeigt. Ein Klick schaltet den Vollbildmodus um. Die Ansicht braucht keinen Login.
 - **Admin-Modus** (per Passwort):
   - Spieleliste pflegen: Spiele anlegen, Max. Spieler festlegen, Cover hochladen oder als URL eintragen
   - Runden, Nachrichten und Nutzer löschen. Das Löschen eines Nutzers gibt auch dessen Nickname wieder frei.
