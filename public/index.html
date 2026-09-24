@@ -28,16 +28,8 @@
       <p class="error" id="login-error" hidden></p>
       <button class="btn primary" type="submit">Los geht's</button>
     </form>
-    <form id="code-form" class="card login-card" hidden>
-      <h2>Mit Geräte-Code anmelden</h2>
-      <p class="muted small">Den Code findest du auf deinem anderen Gerät unter „Profil &amp; Einstellungen“.</p>
-      <label>Geräte-Code
-        <input name="token" required autocomplete="off">
-      </label>
-      <p class="error" id="code-error" hidden></p>
-      <button class="btn primary" type="submit">Anmelden</button>
-    </form>
-    <button class="link" id="toggle-code">Ich habe schon einen Nickname auf einem anderen Gerät</button>
+    <p class="muted small login-hint">Schon auf einem anderen Gerät angemeldet? Öffne dort
+      „Profil &amp; Einstellungen“ → „Auf dem Handy anmelden“ und scanne den QR-Code.</p>
     <a class="muted small" id="login-website" target="_blank" rel="noopener" hidden></a>
   </main>
 
@@ -197,11 +189,16 @@
         </div>
       </div>
 
-      <h3>Geräte-Code</h3>
-      <p class="muted small">Damit meldest du dich mit deinem Nickname auf einem weiteren Gerät (z.B. Handy) an. Nicht weitergeben!</p>
-      <div class="row">
-        <input id="device-code" readonly>
-        <button type="button" class="btn" id="copy-code">Kopieren</button>
+      <h3>Auf dem Handy anmelden</h3>
+      <p class="muted small">Mit deinem Nickname auch auf einem weiteren Gerät – ohne etwas einzutippen.</p>
+      <button type="button" class="btn" id="show-login-qr">QR-Code anzeigen</button>
+      <div class="share" id="login-qr-box" hidden>
+        <img id="login-qr" class="qr" alt="QR-Code zum Anmelden mit deinem Nickname">
+        <div>
+          <p class="muted small">Handy-Kamera auf den Code richten und den Link öffnen – fertig.</p>
+          <p class="small warn-text">Nur selbst scannen! Wer den Code scannt, ist als du angemeldet.</p>
+          <p class="small warn-text" id="login-qr-localhost" hidden>Achtung: Die Adresse ist „localhost“ – das Handy erreicht den Server so nicht. Öffne die App über die LAN-Adresse oder setze PUBLIC_URL.</p>
+        </div>
       </div>
 
       <h3>Benachrichtigungen</h3>

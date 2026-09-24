@@ -211,7 +211,8 @@ function createApp({
     const text = String(req.query.text || '');
     if (!text || text.length > 1000) throw new HttpError(400, 'Ungültiger Text.');
     QRCode.toString(text, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' })
-      .then((svg) => res.type('image/svg+xml').set('cache-control', 'public, max-age=86400').send(svg))
+      // private: der QR-Code zum Anmelden auf dem Handy enthält den persönlichen Anmelde-Code
+      .then((svg) => res.type('image/svg+xml').set('cache-control', 'private, max-age=86400').send(svg))
       .catch(next);
   });
 
@@ -232,7 +233,7 @@ function createApp({
   });
 
   api.post('/login', (req, res) => {
-    // Login mit Geräte-Code (z.B. um den gleichen Nickname am Handy zu nutzen)
+    // Login mit dem Anmelde-Code aus dem QR-Code (gleicher Nickname auf einem weiteren Gerät)
     if (!req.body.nickname && req.body.token) {
       const user = store.userByToken(String(req.body.token).trim());
       if (!user) throw new HttpError(401, 'Unbekannter Code.');

@@ -4,7 +4,7 @@ Mitspieler finden auf der LAN-Party: Teilnehmer kündigen Spielrunden an (z.B. �
 
 ## Funktionen
 
-- **Anmeldung nur mit Nickname**, optional mit Sitzplatz, ohne Passwort. Über den **Geräte-Code** (unter *Profil & Einstellungen*) nutzt man denselben Nickname auch auf dem Handy.
+- **Anmeldung nur mit Nickname**, optional mit Sitzplatz, ohne Passwort. Auf dem Handy meldet man sich mit demselben Nickname per **QR-Code** an (unter *Profil & Einstellungen → Auf dem Handy anmelden*), ohne etwas einzutippen.
 - **Runden ankündigen**:
   - Spiel aus der **Spieleliste mit Logos** wählen oder frei eintippen. Die Auswahlliste filtert beim Tippen, lässt sich per Pfeiltasten bedienen und füllt die Spielerzahl vor. Mitgeliefert sind 36 typische LAN-Spiele
   - Tag (die **Event-Tage** aus dem Branding) und Uhrzeit, mit Schnellwahl „jetzt / in 15 min / …“
