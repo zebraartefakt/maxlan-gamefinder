@@ -35,6 +35,7 @@
     config: { adminEnabled: false, publicBoard: true, brand: { title: document.title } },
     catalog: [],
     gameHistory: [],
+    gameModes: [],
     combo: { items: [], index: -1 },
     rounds: new Map(),
     users: new Map(),
@@ -299,7 +300,8 @@
       el('strong', {}, fmtTime.format(r.startsAt)),
       el('span', { class: 'muted small' }, relative(r.startsAt))),
     el('div', { class: 'round-main' },
-      el('div', { class: 'round-title' }, coverImg(r.game), el('h3', {}, r.game), ...tags),
+      el('div', { class: 'round-title' }, coverImg(r.game), el('h3', {}, r.game),
+        r.mode ? el('span', { class: 'mode-badge', title: 'Spielmodus' }, r.mode) : null, ...tags),
       r.description ? el('p', { class: 'muted small clamp' }, r.description) : null,
       el('div', { class: 'round-people' },
         el('span', { class: 'count', title: 'Spieler' }, '👥 ', cap),
@@ -324,6 +326,8 @@
     const r = state.rounds.get(state.openRoundId);
     if (!r) return;
     $('#rd-title').textContent = r.game;
+    $('#rd-mode').textContent = r.mode;
+    $('#rd-mode').hidden = !r.mode;
     const cover = catalogEntry(r.game)?.cover;
     $('#rd-cover').hidden = !cover;
     if (cover) $('#rd-cover').src = cover;
@@ -433,6 +437,7 @@
     if (round) {
       form.game.value = round.game;
       form.maxPlayers.value = round.maxPlayers ?? '';
+      form.mode.value = round.mode || '';
       form.description.value = round.description;
       setFormTime(round.startsAt);
     } else {
@@ -450,9 +455,11 @@
     closeCombo();
     updateGameCover();
     $('#edit-dialog').showModal();
-    api('GET', '/games').then(({ games, catalog }) => {
+    api('GET', '/games').then(({ games, modes, catalog }) => {
       state.catalog = catalog;
       state.gameHistory = games;
+      state.gameModes = modes;
+      updateModeSuggestions();
       updateGameCover();
     }).catch(() => {});
   }
@@ -511,6 +518,14 @@
     if (g.maxPlayers) form.maxPlayers.value = g.maxPlayers;
     closeCombo();
     updateGameCover();
+    updateModeSuggestions();
+  }
+
+  /** Schlägt Spielmodi vor, die für dieses Spiel schon einmal verwendet wurden. */
+  function updateModeSuggestions() {
+    const game = gameInput().value.trim().toLowerCase();
+    const modes = state.gameModes.filter((m) => m.game.toLowerCase() === game).map((m) => m.mode);
+    $('#mode-suggestions').replaceChildren(...modes.map((m) => el('option', { value: m })));
   }
 
   /** Zeigt das Cover des gewählten Spiels klein im Eingabefeld. */
@@ -551,6 +566,7 @@
     const body = {
       game: form.game.value,
       startsAt,
+      mode: form.mode.value,
       maxPlayers: form.maxPlayers.value === '' ? null : Number(form.maxPlayers.value),
       description: form.description.value,
     };
@@ -789,7 +805,7 @@
     const s = state.settings;
     switch (change.type) {
       case 'create':
-        if (s.n_newRound) notify(`Neue Runde: ${round.game}`, `${actor.nickname} · ${whenLabel(round.startsAt)}`, { roundId: round.id });
+        if (s.n_newRound) notify(`Neue Runde: ${round.game}${round.mode ? ` (${round.mode})` : ''}`, `${actor.nickname} · ${whenLabel(round.startsAt)}`, { roundId: round.id });
         break;
       case 'join':
       case 'waitlist':
@@ -1211,6 +1227,7 @@
     state.combo.index = -1;
     renderCombo();
     updateGameCover();
+    updateModeSuggestions();
   });
   gameInput().addEventListener('focus', () => renderCombo());
   gameInput().addEventListener('click', () => { if (!comboOpen()) renderCombo(); });

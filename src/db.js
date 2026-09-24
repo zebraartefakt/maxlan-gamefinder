@@ -26,6 +26,7 @@ function openDatabase(file) {
       starts_at   INTEGER NOT NULL,
       max_players INTEGER,
       description TEXT NOT NULL DEFAULT '',
+      mode        TEXT NOT NULL DEFAULT '',
       host_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       created_at  INTEGER NOT NULL
     );
@@ -60,6 +61,9 @@ function openDatabase(file) {
     CREATE INDEX IF NOT EXISTS idx_messages_round ON messages(round_id, id);
     CREATE INDEX IF NOT EXISTS idx_rounds_start ON rounds(starts_at);
   `);
+  // Migration: Spielmodus für Datenbanken aus älteren Versionen nachrüsten
+  const roundColumns = db.prepare('PRAGMA table_info(rounds)').all().map((c) => c.name);
+  if (!roundColumns.includes('mode')) db.exec("ALTER TABLE rounds ADD COLUMN mode TEXT NOT NULL DEFAULT ''");
   return createStore(db);
 }
 
@@ -73,9 +77,9 @@ function createStore(db) {
     listUsers: db.prepare('SELECT id, nickname, seat FROM users ORDER BY nickname COLLATE NOCASE'),
     deleteUser: db.prepare('DELETE FROM users WHERE id = ?'),
 
-    insertRound: db.prepare(`INSERT INTO rounds (game, starts_at, max_players, description, host_id, created_at)
-                             VALUES (?, ?, ?, ?, ?, ?)`),
-    updateRound: db.prepare('UPDATE rounds SET game = ?, starts_at = ?, max_players = ?, description = ? WHERE id = ?'),
+    insertRound: db.prepare(`INSERT INTO rounds (game, mode, starts_at, max_players, description, host_id, created_at)
+                             VALUES (?, ?, ?, ?, ?, ?, ?)`),
+    updateRound: db.prepare('UPDATE rounds SET game = ?, mode = ?, starts_at = ?, max_players = ?, description = ? WHERE id = ?'),
     deleteRound: db.prepare('DELETE FROM rounds WHERE id = ?'),
     roundById: db.prepare('SELECT * FROM rounds WHERE id = ?'),
     roundsSince: db.prepare('SELECT * FROM rounds WHERE starts_at >= ? ORDER BY starts_at, id'),
@@ -84,6 +88,8 @@ function createStore(db) {
                                 WHERE p.round_id = ? ORDER BY p.joined_at, p.rowid`),
     join: db.prepare('INSERT OR IGNORE INTO participants (round_id, user_id, joined_at) VALUES (?, ?, ?)'),
     leave: db.prepare('DELETE FROM participants WHERE round_id = ? AND user_id = ?'),
+    modes: db.prepare(`SELECT game, mode, COUNT(*) AS n FROM rounds WHERE mode <> ''
+                       GROUP BY game COLLATE NOCASE, mode COLLATE NOCASE ORDER BY n DESC LIMIT 500`),
     games: db.prepare(`SELECT game, COUNT(*) AS n FROM rounds GROUP BY game COLLATE NOCASE
                        ORDER BY n DESC, game COLLATE NOCASE LIMIT 200`),
 
@@ -132,6 +138,7 @@ function createStore(db) {
       game: row.game,
       startsAt: row.starts_at,
       maxPlayers: row.max_players,
+      mode: row.mode,
       description: row.description,
       host: q.userById.get(row.host_id),
       createdAt: row.created_at,
@@ -158,15 +165,15 @@ function createStore(db) {
     },
     deleteUser: (id) => q.deleteUser.run(id).changes > 0,
 
-    createRound({ game, startsAt, maxPlayers, description, hostId }) {
+    createRound({ game, mode = '', startsAt, maxPlayers, description, hostId }) {
       const now = Date.now();
-      const { lastInsertRowid } = q.insertRound.run(game, startsAt, maxPlayers, description, hostId, now);
+      const { lastInsertRowid } = q.insertRound.run(game, mode, startsAt, maxPlayers, description, hostId, now);
       const id = Number(lastInsertRowid);
       q.join.run(id, hostId, now);
       return hydrateRound(q.roundById.get(id));
     },
-    updateRound(id, { game, startsAt, maxPlayers, description }) {
-      q.updateRound.run(game, startsAt, maxPlayers, description, id);
+    updateRound(id, { game, mode = '', startsAt, maxPlayers, description }) {
+      q.updateRound.run(game, mode, startsAt, maxPlayers, description, id);
       return hydrateRound(q.roundById.get(id));
     },
     deleteRound: (id) => q.deleteRound.run(id).changes > 0,
@@ -180,6 +187,8 @@ function createStore(db) {
       return q.leave.run(roundId, userId).changes > 0;
     },
     games: () => q.games.all().map((r) => r.game),
+    /** Bisher genutzte Spielmodi je Spiel, als Vorschläge beim Ankündigen */
+    modes: () => q.modes.all().map((r) => ({ game: r.game, mode: r.mode })),
 
     addMessage(roundId, userId, text) {
       const { lastInsertRowid } = q.insertMessage.run(roundId, userId, text, Date.now());

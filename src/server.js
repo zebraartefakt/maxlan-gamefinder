@@ -12,7 +12,7 @@ const { Server } = require('socket.io');
 const { openDatabase } = require('./db');
 const { loadBrand } = require('./brand');
 
-const LIMITS = { nickname: 24, seat: 16, game: 60, description: 300, message: 500 };
+const LIMITS = { nickname: 24, seat: 16, game: 60, mode: 24, description: 300, message: 500 };
 const ROUND_VISIBLE_AFTER_START_MS = 12 * 60 * 60 * 1000;
 const CHAT_MIN_INTERVAL_MS = 400;
 const BOARD_PAST_MS = 3 * 60 * 60 * 1000;
@@ -40,6 +40,7 @@ function cleanText(value, max, { required = false, field = 'Feld' } = {}) {
 
 function parseRoundInput(body, { previousStartsAt = null } = {}) {
   const game = cleanText(body.game, LIMITS.game, { required: true, field: 'Spiel' });
+  const mode = cleanText(body.mode, LIMITS.mode, { field: 'Spielmodus' });
   const description = cleanText(body.description, LIMITS.description, { field: 'Beschreibung' });
   const startsAt = Number(body.startsAt);
   if (!Number.isFinite(startsAt) || startsAt <= 0) throw new HttpError(400, 'Ungültige Startzeit.');
@@ -56,7 +57,7 @@ function parseRoundInput(body, { previousStartsAt = null } = {}) {
       throw new HttpError(400, 'Max. Spieler muss zwischen 2 und 256 liegen.');
     }
   }
-  return { game, description, startsAt, maxPlayers };
+  return { game, mode, description, startsAt, maxPlayers };
 }
 
 function parseGameInput(body) {
@@ -219,6 +220,7 @@ function createApp({
     const rounds = store.listRounds(Date.now() - BOARD_PAST_MS).map((r) => ({
       id: r.id,
       game: r.game,
+      mode: r.mode,
       startsAt: r.startsAt,
       maxPlayers: r.maxPlayers,
       description: r.description,
@@ -266,7 +268,7 @@ function createApp({
 
   // ---- Rounds -------------------------------------------------------------
 
-  api.get('/games', auth, (_req, res) => res.json({ games: store.games(), catalog: store.listGames() }));
+  api.get('/games', auth, (_req, res) => res.json({ games: store.games(), modes: store.modes(), catalog: store.listGames() }));
 
   api.get('/rounds', auth, (_req, res) => {
     res.json({ rounds: store.listRounds(Date.now() - ROUND_VISIBLE_AFTER_START_MS) });
