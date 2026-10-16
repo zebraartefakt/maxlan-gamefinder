@@ -106,9 +106,20 @@
     return `${same ? 'Heute' : fmtShortDay.format(ts)} ${fmtTime.format(ts)} Uhr`;
   }
 
+  /** Kalendertage zwischen heute und ts (0 = heute, 1 = morgen …) */
+  function calendarDays(ts, now = Date.now()) {
+    const midnight = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
+    return Math.round((midnight(ts) - midnight(now)) / 86400000);
+  }
+
   function relative(ts) {
     const min = Math.round((ts - Date.now()) / 60000);
     if (min === 0) return 'jetzt';
+    if (min >= 24 * 60) {
+      // nach Kalendertagen, damit es zur Überschrift „Morgen“ passt
+      const days = calendarDays(ts);
+      return days <= 1 ? 'morgen' : `in ${days} Tagen`;
+    }
     const abs = Math.abs(min);
     const txt = abs < 60 ? `${abs} min` : abs < 60 * 24 ? `${Math.floor(abs / 60)} h ${abs % 60 ? `${abs % 60} min` : ''}`.trim() : `${Math.round(abs / 1440)} ${Math.round(abs / 1440) === 1 ? 'Tag' : 'Tagen'}`;
     return min > 0 ? `in ${txt}` : `seit ${txt}`;

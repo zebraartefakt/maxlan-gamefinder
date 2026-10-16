@@ -2,6 +2,21 @@
 
 Mitspieler finden auf der LAN-Party: Teilnehmer kündigen Spielrunden an (z.B. „Samstag 14:00 FlatOut 2, max. 8 Spieler“), andere treten mit einem Klick bei und alle stimmen sich im Chat ab. Die App lässt sich pro Veranstaltung **branden**. Mitgeliefert ist ein Profil für die [Maxlan](https://www.maxlan.de).
 
+## So sieht's aus
+
+**Runden-Tab** am Desktop und auf dem Handy: Anstehende Runden nach Tagen sortiert, darunter „Bereits gestartet“. Logos, Spielmodus, Teilnehmer und freie Plätze sind auf einen Blick zu sehen.
+
+<p>
+  <img src="docs/screenshots/runden.png" alt="Runden-Tab am Desktop" width="68%">
+  <img src="docs/screenshots/runden-handy.png" alt="Runden-Tab auf dem Handy" width="28%">
+</p>
+
+**Beamer-Ansicht (`/beamer`):** Die nächsten Runden mit freien Plätzen und, darunter, die laufenden Runden. Die Runde, die als Nächstes startet, ist hervorgehoben. Rechts stehen der QR-Code zum Mitmachen und die Zahl der Spieler online.
+
+![Beamer-Ansicht](docs/screenshots/beamer.png)
+
+<sub>Die Screenshots zeigen Beispieldaten mit dem Maxlan-Branding. Die Spiele-Logos in den Bildern stammen von Steam bzw. Wikipedia. Die Logo-Dateien selbst sind nicht Teil des Repositories, der Server lädt sie zur Laufzeit.</sub>
+
 ## Funktionen
 
 - **Anmeldung nur mit Nickname**, optional mit Sitzplatz im Format `B-07` (Buchstabe, Bindestrich, zwei Ziffern; „b7“ wird automatisch zu „B-07“), ohne Passwort. Auf dem Handy meldet man sich mit demselben Nickname per **QR-Code** an (unter *Profil & Einstellungen → Auf dem Handy anmelden*), ohne etwas einzutippen.
