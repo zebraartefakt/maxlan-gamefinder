@@ -404,3 +404,21 @@ test('Chat: Text wird bereinigt, pro Chat nur die neuesten 50 Nachrichten', asyn
   const global = (await call('GET', '/messages?round=global', { token: t })).data.messages;
   assert.ok(global.length > 0 && global.every((m) => m.roundId === null));
 });
+
+test('Admin-Passwort mit Sonderzeichen (URL-kodiert übertragen)', async () => {
+  const special = createApp({ dbFile: ':memory:', adminPassword: '  G€heim$2026  ' });
+  await new Promise((r) => special.server.listen(0, '127.0.0.1', r));
+  const url = `http://127.0.0.1:${special.server.address().port}/api/admin/check`;
+  const check = (pw) => fetch(url, { method: 'POST', headers: { 'x-admin-password': pw } }).then((r) => r.status);
+  try {
+    assert.equal(await check(encodeURIComponent('G€heim$2026')), 200);
+    assert.equal(await check(encodeURIComponent(' G€heim$2026 ')), 200); // Leerzeichen am Rand egal
+    assert.equal(await check(encodeURIComponent('G€heim')), 403);
+    // unkodiert (ältere Clients) klappt weiterhin, solange nur ISO-8859-1-Zeichen vorkommen
+    assert.equal(await check('bitte-aendern'), 403);
+  } finally {
+    special.io.close();
+    await new Promise((r) => special.server.close(r));
+  }
+  assert.equal((await call('POST', '/admin/check', { admin: 'geheim' })).status, 200);
+});
