@@ -348,3 +348,59 @@ test('Migration: alte Datenbank ohne Spielmodus-Spalte', () => {
   assert.equal(updated.mode, 'Onslaught');
   store.close();
 });
+
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+
+test('Spam-Schutz: Höchstzahl, Wiederholung, Stummschaltung', async () => {
+  const t = await login('Spammer');
+  const say = (text) => call('POST', '/messages', { token: t, body: { roundId: null, text } });
+
+  // 5 Nachrichten in 10 s sind erlaubt, die 6. nicht
+  for (let i = 1; i <= 5; i++) {
+    assert.equal((await say(`Nachricht ${i}`)).status, 201);
+    await pause(420);
+  }
+  const sixth = await say('Nachricht 6');
+  assert.equal(sixth.status, 429);
+  assert.match(sixth.data.error, /Zu viele Nachrichten/);
+
+  // Wiederholung derselben Nachricht (auch in anderer Schreibweise)
+  const t2 = await login('Wiederholer');
+  assert.equal((await call('POST', '/messages', { token: t2, body: { text: 'Wer zockt CS?' } })).status, 201);
+  await pause(420);
+  const dup = await call('POST', '/messages', { token: t2, body: { text: '  wer zockt cs?  ' } });
+  assert.equal(dup.status, 429);
+  assert.match(dup.data.error, /schon geschickt/);
+
+  // Drei Verstöße innerhalb einer Minute → stummgeschaltet, auch für neue Texte
+  await pause(420);
+  await call('POST', '/messages', { token: t2, body: { text: 'Wer zockt CS?' } });
+  await pause(420);
+  const muted = await call('POST', '/messages', { token: t2, body: { text: 'Wer zockt CS?' } });
+  assert.match(muted.data.error, /stummgeschaltet/);
+  await pause(420);
+  const still = await call('POST', '/messages', { token: t2, body: { text: 'Etwas ganz Neues' } });
+  assert.equal(still.status, 429);
+  assert.match(still.data.error, /noch \d+ s stummgeschaltet/);
+});
+
+test('Chat: Text wird bereinigt, pro Chat nur die neuesten 50 Nachrichten', async () => {
+  const t = await login('Aufräumer');
+  const me = (await call('GET', '/me', { token: t })).data.user;
+  const { round } = (await call('POST', '/rounds', { token: t, body: { game: 'Chat-Test', startsAt: inOneHour() } })).data;
+
+  const clean = await call('POST', '/messages', { token: t, body: { roundId: round.id, text: '  GG\n\n  neeeeeeeeeeeeeein!!!!!!!!!!!!  ' } });
+  assert.equal(clean.data.message.text, 'GG neeeeeeeein!!!!!!!!');
+
+  for (let i = 0; i < 60; i++) ctx.store.addMessage(round.id, me.id, `Alt ${i}`);
+  await pause(420);
+  await call('POST', '/messages', { token: t, body: { roundId: round.id, text: 'Die neueste' } });
+  const { messages } = (await call('GET', `/messages?round=${round.id}`, { token: t })).data;
+  assert.equal(messages.length, 50);
+  assert.equal(messages.at(-1).text, 'Die neueste');
+  assert.equal(messages[0].text, 'Alt 11');
+
+  // Der globale Chat ist davon nicht betroffen
+  const global = (await call('GET', '/messages?round=global', { token: t })).data.messages;
+  assert.ok(global.length > 0 && global.every((m) => m.roundId === null));
+});
