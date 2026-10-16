@@ -72,6 +72,12 @@ npm start
 | `DB_FILE`             | `$DATA_DIR/gamefinder.db` | Pfad zur Datenbank                                                 |
 | `TLS_CERT`, `TLS_KEY` | *(leer)*                  | Zertifikat und Key, um direkt HTTPS anzubieten                     |
 
+### „Falsches Admin-Passwort“?
+
+- Beim Start schreibt der Server ins Log, ob die Admin-Funktionen aktiv sind und wie lang das Passwort ist, das tatsächlich angekommen ist (z.B. `Passwort: 13 Zeichen, beginnt mit „b“`). Ansehen mit `docker compose logs gamefinder`.
+- **`$` im Passwort:** Docker Compose behandelt `$…` als Variable und entfernt sie stillschweigend. Aus `"Geh$eim"` wird `"Geh"`. In `docker-compose.yml` deshalb `$$` schreiben, also `"Geh$$eim"`.
+- **Änderungen übernehmen:** Nach dem Ändern von `docker-compose.yml` mit `docker compose up -d` neu starten. `docker compose restart` übernimmt geänderte Umgebungsvariablen nicht.
+
 ## Branding
 
 Ein Branding ist ein Ordner unter `brands/`, z.B. `brands/maxlan/`:

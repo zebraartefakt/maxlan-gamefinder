@@ -123,11 +123,12 @@ function createApp({
   dbFile = ':memory:',
   dataDir = null,
   brandDir = null,
-  adminPassword = '',
+  adminPassword: rawAdminPassword = '',
   publicBoard = true,
   autoCacheCovers = false,
   tls = null,
 } = {}) {
+  const adminPassword = String(rawAdminPassword).trim();
   const store = openDatabase(dbFile);
   const brand = loadBrand(brandDir);
   const coverDir = path.join(dataDir || fs.mkdtempSync(path.join(os.tmpdir(), 'gamefinder-')), 'covers');
@@ -222,16 +223,25 @@ function createApp({
     next();
   }
 
+  /**
+   * Das Passwort kommt URL-kodiert im Header, damit auch Zeichen wie „€“ funktionieren
+   * (HTTP-Header erlauben nur ISO-8859-1). Ältere Clients schicken es unkodiert.
+   */
+  function adminHeader(req) {
+    const raw = req.get('x-admin-password') || '';
+    try { return decodeURIComponent(raw).trim(); } catch { return raw.trim(); }
+  }
+
   function admin(req, _res, next) {
     if (!adminPassword) return next(new HttpError(403, 'Admin-Funktionen sind deaktiviert.'));
-    if (!safeEqual(req.get('x-admin-password') || '', adminPassword)) {
+    if (!safeEqual(adminHeader(req), adminPassword)) {
       return next(new HttpError(403, 'Falsches Admin-Passwort.'));
     }
     next();
   }
 
   function isAdmin(req) {
-    const pw = req.get('x-admin-password');
+    const pw = adminHeader(req);
     return Boolean(adminPassword && pw && safeEqual(pw, adminPassword));
   }
 
@@ -611,5 +621,11 @@ if (require.main === module) {
   });
   server.listen(port, host, () => {
     console.log(`Gamefinder läuft auf ${tls ? 'https' : 'http'}://${host}:${port} (DB: ${dbFile}, Branding: ${brandDir})`);
+    // Hilft bei „Falsches Admin-Passwort“: Länge und erstes Zeichen zeigen, was tatsächlich ankam
+    // (z.B. wenn Docker Compose ein $ im Passwort als Variable ersetzt hat) – ohne es zu verraten.
+    const pw = (process.env.ADMIN_PASSWORD || '').trim();
+    if (!pw) console.log('Admin-Funktionen: deaktiviert (ADMIN_PASSWORD ist leer)');
+    else console.log(`Admin-Funktionen: aktiv (Passwort: ${pw.length} Zeichen, beginnt mit „${[...pw][0]}“)`);
+    if (pw === 'bitte-aendern') console.warn('Hinweis: Das Admin-Passwort ist noch der Standardwert aus docker-compose.yml.');
   });
 }

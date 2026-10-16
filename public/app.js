@@ -56,7 +56,7 @@
   async function api(method, url, body) {
     const headers = { 'content-type': 'application/json' };
     if (state.token) headers['x-token'] = state.token;
-    if (state.adminPassword) headers['x-admin-password'] = state.adminPassword;
+    if (state.adminPassword) headers['x-admin-password'] = encodeURIComponent(state.adminPassword);
     const res = await fetch(`/api${url}`, {
       method,
       headers,
@@ -1170,7 +1170,7 @@
     try {
       const res = await fetch(`/api/admin/games/${coverTarget}/cover`, {
         method: 'POST',
-        headers: { 'content-type': file.type, 'x-token': state.token, 'x-admin-password': state.adminPassword },
+        headers: { 'content-type': file.type, 'x-token': state.token, 'x-admin-password': encodeURIComponent(state.adminPassword) },
         body: file,
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Upload fehlgeschlagen.');
@@ -1182,7 +1182,7 @@
       state.adminPassword = '';
       sessionStorage.removeItem('gf.admin');
     } else {
-      const pw = $('#admin-password').value;
+      const pw = $('#admin-password').value.trim();
       state.adminPassword = pw;
       try {
         await api('POST', '/admin/check');

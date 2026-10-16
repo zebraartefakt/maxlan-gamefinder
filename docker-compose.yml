@@ -11,6 +11,8 @@ services:
       # Adresse, unter der Teilnehmer die App erreichen (für QR-Code, Aushang und Beamer)
       PUBLIC_URL: "http://192.168.1.10:3000"
       # Passwort für Admin-Funktionen (Spieleliste, Moderation). Leer = deaktiviert.
+      # Achtung: Ein „$“ muss als „$$“ geschrieben werden, sonst ersetzt Docker Compose es
+      # stillschweigend (aus "Geh$eim" würde "Geh"). Nach Änderungen: docker compose up -d
       ADMIN_PASSWORD: "bitte-aendern"
       # Beamer-Ansicht ohne Login erlauben (true/false)
       PUBLIC_BOARD: "true"
