@@ -227,6 +227,44 @@
     </form>
   </dialog>
 
+  <!-- Spieler verwalten (Admin) -->
+  <dialog id="user-dialog" class="dialog">
+    <form id="user-form" method="dialog">
+      <div class="dialog-head">
+        <h2>Spieler verwalten</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Schließen">✕</button>
+      </div>
+      <label>Nickname
+        <input name="nickname" required minlength="2" maxlength="24" autocomplete="off">
+      </label>
+      <label>Sitzplatz
+        <input name="seat" maxlength="16" class="seat-input" autocomplete="off">
+      </label>
+      <p class="error" id="user-error" hidden></p>
+      <div class="dialog-foot">
+        <button type="button" class="btn" data-close>Abbrechen</button>
+        <button class="btn primary" type="submit">Speichern</button>
+      </div>
+
+      <div id="ban-section">
+        <h3>Chat-Sperre</h3>
+        <p class="ban-status" id="ban-status"></p>
+        <p class="muted small">Beim Sperren werden alle bisherigen Nachrichten des Spielers sofort gelöscht.</p>
+        <div class="ban-buttons">
+          <button type="button" class="btn" data-ban="1h">1 Stunde</button>
+          <button type="button" class="btn" data-ban="24h">24 Stunden</button>
+          <button type="button" class="btn danger" data-ban="permanent">Dauerhaft</button>
+          <button type="button" class="btn" data-ban="none" id="ban-lift">Sperre aufheben</button>
+        </div>
+      </div>
+
+      <div class="user-danger">
+        <button type="button" class="btn danger" id="user-delete">Spieler löschen</button>
+        <span class="muted small">Löscht auch seine Runden und Nachrichten, der Nickname wird frei.</span>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Spiele verwalten (Admin) -->
   <dialog id="games-dialog" class="dialog">
     <div class="dialog-head">

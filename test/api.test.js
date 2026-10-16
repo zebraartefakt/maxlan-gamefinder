@@ -422,3 +422,84 @@ test('Admin-Passwort mit Sonderzeichen (URL-kodiert übertragen)', async () => {
   }
   assert.equal((await call('POST', '/admin/check', { admin: 'geheim' })).status, 200);
 });
+
+test('Admin: Spieler umbenennen und Sitzplatz ändern', async () => {
+  const t = await login('Tippfehlr', 'A1');
+  await login('Belegt');
+  const u = (await call('GET', '/me', { token: t })).data.user;
+
+  assert.equal((await call('PATCH', `/admin/users/${u.id}`, { body: { nickname: 'Tippfehler' } })).status, 403);
+  const renamed = await call('PATCH', `/admin/users/${u.id}`, { admin: 'geheim', body: { nickname: ' Tippfehler ', seat: 'B7' } });
+  assert.equal(renamed.status, 200);
+  assert.equal(renamed.data.user.nickname, 'Tippfehler');
+  assert.equal(renamed.data.user.seat, 'B7');
+  // Der Spieler bleibt mit seinem Gerät angemeldet – nur der Name ist neu
+  assert.equal((await call('GET', '/me', { token: t })).data.user.nickname, 'Tippfehler');
+
+  assert.equal((await call('PATCH', `/admin/users/${u.id}`, { admin: 'geheim', body: { nickname: 'belegt' } })).status, 409);
+  assert.equal((await call('PATCH', `/admin/users/${u.id}`, { admin: 'geheim', body: { nickname: 'x' } })).status, 400);
+  // Groß-/Kleinschreibung am eigenen Namen ändern ist erlaubt
+  assert.equal((await call('PATCH', `/admin/users/${u.id}`, { admin: 'geheim', body: { nickname: 'TIPPFEHLER' } })).status, 200);
+  assert.equal((await call('PATCH', '/admin/users/99999', { admin: 'geheim', body: { nickname: 'Niemand' } })).status, 404);
+});
+
+test('Admin: Chat-Sperre löscht Nachrichten sofort und blockiert den Chat', async () => {
+  const t = await login('Troll2');
+  const other = await login('Unbeteiligt');
+  const u = (await call('GET', '/me', { token: t })).data.user;
+  const { round } = (await call('POST', '/rounds', { token: other, body: { game: 'Sperr-Test', startsAt: inOneHour() } })).data;
+  await call('POST', '/messages', { token: t, body: { text: 'Spam im globalen Chat' } });
+  await pause(420);
+  await call('POST', '/messages', { token: t, body: { roundId: round.id, text: 'Spam in der Runde' } });
+  await call('POST', '/messages', { token: other, body: { roundId: round.id, text: 'Ich bleibe stehen' } });
+
+  const socket = ioClient(base, { auth: { token: other }, transports: ['websocket'] });
+  await new Promise((resolve) => socket.on('connect', resolve));
+  const purged = new Promise((resolve) => socket.on('messages:purged', resolve));
+
+  assert.equal((await call('POST', `/admin/users/${u.id}/chat-ban`, { body: { duration: '1h' } })).status, 403);
+  assert.equal((await call('POST', `/admin/users/${u.id}/chat-ban`, { admin: 'geheim', body: { duration: '2h' } })).status, 400);
+  const ban = await call('POST', `/admin/users/${u.id}/chat-ban`, { admin: 'geheim', body: { duration: '1h' } });
+  assert.equal(ban.status, 200);
+  assert.equal(ban.data.deletedMessages, 2);
+  const until = ban.data.user.chatBannedUntil;
+  assert.ok(until > Date.now() + 59 * 60 * 1000 && until <= Date.now() + 60 * 60 * 1000);
+  assert.deepEqual(await purged, { userId: u.id });
+  socket.close();
+
+  const roundMsgs = (await call('GET', `/messages?round=${round.id}`, { token: other })).data.messages;
+  assert.deepEqual(roundMsgs.map((m) => m.text), ['Ich bleibe stehen']);
+  const globalMsgs = (await call('GET', '/messages?round=global', { token: other })).data.messages;
+  assert.ok(!globalMsgs.some((m) => m.user.id === u.id));
+
+  const blocked = await call('POST', '/messages', { token: t, body: { text: 'Hallo?' } });
+  assert.equal(blocked.status, 403);
+  assert.match(blocked.data.error, /bis .* Uhr vom Chat ausgeschlossen/);
+  // Runden ankündigen und beitreten geht weiterhin – gesperrt ist nur der Chat
+  assert.equal((await call('POST', `/rounds/${round.id}/join`, { token: t })).status, 200);
+
+  const perm = await call('POST', `/admin/users/${u.id}/chat-ban`, { admin: 'geheim', body: { duration: 'permanent' } });
+  assert.equal(perm.data.deletedMessages, 0);
+  assert.match((await call('POST', '/messages', { token: t, body: { text: 'Hallo?' } })).data.error, /dauerhaft/);
+  assert.equal((await call('GET', '/me', { token: t })).data.user.chatBannedUntil, 8640000000000000);
+
+  const lifted = await call('POST', `/admin/users/${u.id}/chat-ban`, { admin: 'geheim', body: { duration: 'none' } });
+  assert.equal(lifted.data.user.chatBannedUntil, null);
+  await pause(420); // Mindestabstand des Spam-Schutzes
+  assert.equal((await call('POST', '/messages', { token: t, body: { text: 'Bin wieder brav' } })).status, 201);
+});
+
+test('Migration: alte Datenbank ohne Chat-Sperre-Spalte', () => {
+  const { DatabaseSync } = require('node:sqlite');
+  const { openDatabase } = require('../src/db');
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'gf-mig2-')), 'alt.db');
+  const old = new DatabaseSync(file);
+  old.exec(`CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, nickname TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      seat TEXT NOT NULL DEFAULT '', token TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL);
+    INSERT INTO users (nickname, token, created_at) VALUES ('Alt', 'tok', 0);`);
+  old.close();
+  const store = openDatabase(file);
+  assert.equal(store.userByToken('tok').chatBannedUntil, null);
+  assert.equal(store.setChatBan(1, 123).chatBannedUntil, 123);
+  store.close();
+});

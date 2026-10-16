@@ -35,7 +35,10 @@ Mitspieler finden auf der LAN-Party: Teilnehmer kündigen Spielrunden an (z.B. �
   - Pro Seite zeigt sie so viele Runden, wie auf den Bildschirm passen. Bei mehr Runden gibt es höchstens eine zweite Seite: Seite 1 steht 30 Sekunden, Seite 2 zehn Sekunden. Was auch dort nicht mehr passt, wird als „X weitere Runden in der App“ angezeigt. Ein Klick schaltet den Vollbildmodus um. Die Ansicht braucht keinen Login.
 - **Admin-Modus** (per Passwort):
   - Spieleliste pflegen: Spiele anlegen, Max. Spieler festlegen, Cover hochladen oder als URL eintragen
-  - Runden, Nachrichten und Nutzer löschen. Das Löschen eines Nutzers gibt auch dessen Nickname wieder frei.
+  - Runden, Nachrichten und Nutzer löschen.
+  - **Spieler verwalten** (✏️ in der Spielerliste oder 🔇 an einer Chat-Nachricht):
+    - Nickname und Sitzplatz ändern
+    - Spieler für 1 Stunde, 24 Stunden oder dauerhaft vom Chat sperren. Dabei werden alle bisherigen Nachrichten des Spielers sofort gelöscht. Runden ankündigen und beitreten kann er weiterhin. Das Löschen eines Nutzers gibt auch dessen Nickname wieder frei.
 
 ## Starten
 

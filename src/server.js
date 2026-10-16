@@ -25,7 +25,10 @@ const SPAM = {
   strikeWindowMs: 60000, // … innerhalb dieser Zeit …
   muteMs: 60000, // … führen zur Stummschaltung
 };
-const MAX_REPEAT_CHARS = 8; // "aaaaaaaaaaaaaaa" → "aaaaaaaa"
+const MAX_REPEAT_CHARS = 8;
+// Chat-Sperren durch Admins; "dauerhaft" = größtmöglicher Zeitpunkt
+const CHAT_BAN_MS = { '1h': 60 * 60 * 1000, '24h': 24 * 60 * 60 * 1000 };
+const BAN_PERMANENT = 8640000000000000; // "aaaaaaaaaaaaaaa" → "aaaaaaaa"
 
 /** Leerzeichen/Zeilenumbrüche zusammenfassen und lange Zeichenwiederholungen kürzen. */
 function normalizeMessage(text) {
@@ -411,7 +414,13 @@ function createApp({
     const text = typeof req.body.text === 'string' ? normalizeMessage(req.body.text) : '';
     if (!text) throw new HttpError(400, 'Nachricht ist leer.');
     if (text.length > LIMITS.message) throw new HttpError(400, `Nachricht ist zu lang (max. ${LIMITS.message}).`);
-    checkSpam(req.user.id, text, Date.now());
+    const now = Date.now();
+    if (req.user.chatBannedUntil > now) {
+      throw new HttpError(403, req.user.chatBannedUntil >= BAN_PERMANENT
+        ? 'Du bist dauerhaft vom Chat ausgeschlossen.'
+        : `Du bist bis ${new Date(req.user.chatBannedUntil).toLocaleString('de-DE', { weekday: 'short', hour: '2-digit', minute: '2-digit' })} Uhr vom Chat ausgeschlossen.`);
+    }
+    checkSpam(req.user.id, text, now);
     const message = store.addMessage(roundId, req.user.id, text);
     store.pruneMessages(roundId, CHAT_KEEP);
     io.emit('message', message);
@@ -421,6 +430,44 @@ function createApp({
   // ---- Admin --------------------------------------------------------------
 
   api.post('/admin/check', admin, (_req, res) => res.json({ ok: true }));
+
+  function loadUser(req) {
+    const user = store.userById(Number(req.params.id));
+    if (!user) throw new HttpError(404, 'Nutzer nicht gefunden.');
+    return user;
+  }
+
+  api.patch('/admin/users/:id', admin, (req, res) => {
+    const user = loadUser(req);
+    const nickname = cleanText(req.body.nickname ?? user.nickname, LIMITS.nickname, { required: true, field: 'Nickname' });
+    if (nickname.length < 2) throw new HttpError(400, 'Nickname muss mindestens 2 Zeichen haben.');
+    const seat = cleanText(req.body.seat ?? user.seat, LIMITS.seat, { field: 'Sitzplatz' });
+    const taken = store.userByNick(nickname);
+    if (taken && taken.id !== user.id) throw new HttpError(409, 'Dieser Nickname ist schon vergeben.');
+    const updated = store.updateUser(user.id, { nickname, seat });
+    io.emit('user', updated);
+    res.json({ user: updated });
+  });
+
+  // Chat-Sperre: 1h, 24h, dauerhaft oder aufheben. Beim Sperren werden alle bisherigen
+  // Nachrichten des Spielers sofort gelöscht (global und in allen Runden-Chats).
+  api.post('/admin/users/:id/chat-ban', admin, (req, res) => {
+    const user = loadUser(req);
+    const { duration } = req.body;
+    let until;
+    if (duration === 'none') until = null;
+    else if (duration === 'permanent') until = BAN_PERMANENT;
+    else if (CHAT_BAN_MS[duration]) until = Date.now() + CHAT_BAN_MS[duration];
+    else throw new HttpError(400, 'Ungültige Dauer (1h, 24h, permanent oder none).');
+    const updated = store.setChatBan(user.id, until);
+    let deletedMessages = 0;
+    if (until !== null) {
+      deletedMessages = store.deleteMessagesByUser(user.id);
+      io.emit('messages:purged', { userId: user.id });
+    }
+    io.emit('user', updated);
+    res.json({ user: updated, deletedMessages });
+  });
 
   api.delete('/admin/users/:id', admin, (req, res) => {
     const id = Number(req.params.id);
