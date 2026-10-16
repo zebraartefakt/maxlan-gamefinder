@@ -144,7 +144,12 @@
         const min = Math.round((ts - now) / 60000);
         if (min <= 0) return min > -2 ? 'jetzt' : `läuft seit ${-min} min`;
         if (min < 60) return `in ${min} min`;
-        if (min >= 24 * 60) { const d = Math.round(min / 1440); return `in ${d} ${d === 1 ? 'Tag' : 'Tagen'}`; }
+        if (min >= 24 * 60) {
+          // nach Kalendertagen: „morgen“, „in 2 Tagen“ …
+          const midnight = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
+          const days = Math.round((midnight(ts) - midnight(now)) / 86400000);
+          return days <= 1 ? 'morgen' : `in ${days} Tagen`;
+        }
         return `in ${Math.floor(min / 60)} h ${min % 60 ? `${min % 60} min` : ''}`.trim();
       }
 
