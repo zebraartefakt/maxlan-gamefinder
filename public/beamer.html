@@ -107,7 +107,7 @@
       const $ = (s) => document.querySelector(s);
       // Höchstens zwei Seiten: Seite 1 (die nächsten Runden) länger, Seite 2 kürzer
       const PAGE_MS = [30000, 10000];
-      const RUNNING_VISIBLE_MS = 60 * 60 * 1000;
+      const RUNNING_VISIBLE_MS = 30 * 60 * 1000; // laufende Runden 30 min unter „Läuft gerade“
       const fmtTime = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit' });
       const fmtDate = new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: '2-digit', month: 'long' });
       const fmtDay = new Intl.DateTimeFormat('de-DE', { weekday: 'short' });

@@ -224,6 +224,18 @@
     } catch (e) { toast(e.message, 'error'); }
   }
 
+  async function endRound(id) {
+    const round = state.rounds.get(id);
+    if (!round || !confirm(`Runde „${round.game}“ als beendet markieren?\n\nSie verschwindet sofort aus der Liste und vom Beamer, der Runden-Chat ist danach nicht mehr erreichbar.`)) return;
+    try {
+      await api('POST', `/rounds/${id}/end`);
+      removeRound(id);
+    } catch (e) { toast(e.message, 'error'); }
+  }
+
+  /** Gestartete Runden sind nur begrenzt sichtbar (wie auf dem Server), danach fallen sie weg. */
+  const roundExpired = (r) => r.startsAt < Date.now() - (state.config.roundVisibleMs ?? 3 * 3600000);
+
   function upsertRound(round) {
     state.rounds.set(round.id, round);
     renderRounds();
@@ -251,9 +263,15 @@
     } else if (!isHost) {
       btns.push(el('button', { class: 'btn', onclick: stop(() => leaveRound(round.id)) }, 'Verlassen'));
     }
+    const started = round.startsAt <= Date.now();
+    if (started && (isHost || admin)) {
+      // Gestartete Runde: statt "Absagen" kann der Ersteller sie als beendet markieren
+      btns.push(el('button', { class: 'btn', title: 'Runde aus Liste und Beamer nehmen', onclick: stop(() => endRound(round.id)) },
+        compact ? 'Beenden' : 'Runde beendet'));
+    }
     if (!compact && (isHost || admin)) {
       btns.push(el('button', { class: 'btn', onclick: stop(() => openEditDialog(round)) }, 'Bearbeiten'));
-      btns.push(el('button', { class: 'btn danger', onclick: stop(() => deleteRound(round.id)) }, 'Absagen'));
+      if (!started) btns.push(el('button', { class: 'btn danger', onclick: stop(() => deleteRound(round.id)) }, 'Absagen'));
     }
     return btns;
   }
@@ -267,6 +285,7 @@
     const now = Date.now();
 
     const rounds = [...state.rounds.values()]
+      .filter((r) => !roundExpired(r))
       .filter((r) => !filter || r.game.toLowerCase().includes(filter) || r.host.nickname.toLowerCase().includes(filter))
       .filter((r) => !onlyMine || isMine(r))
       .sort((a, b) => a.startsAt - b.startsAt || a.id - b.id);
@@ -743,7 +762,7 @@
       .sort((a, b) => (state.online.has(b.id) - state.online.has(a.id)) || a.nickname.localeCompare(b.nickname, 'de'));
     $('#player-count').textContent = `${state.online.size} online · ${state.users.size} gesamt`;
     $('#player-list').replaceChildren(...users.map((u) => {
-      const rounds = [...state.rounds.values()].filter((r) => r.startsAt > Date.now() - 3 * 3600000 && r.players.some((p) => p.id === u.id));
+      const rounds = [...state.rounds.values()].filter((r) => !roundExpired(r) && r.players.some((p) => p.id === u.id));
       return el('li', { class: 'card player' },
         el('div', {}, nick(u),
           rounds.length ? el('div', { class: 'muted small' }, rounds.map((r) => r.game).join(', ')) : null,
@@ -966,6 +985,12 @@
     }
   }
 
+  function onRoundEnded({ round, user }) {
+    const involved = state.rounds.has(round.id) && wasInvolved(state.rounds.get(round.id));
+    removeRound(round.id);
+    if (involved && user && user.id !== state.me.id) toast(`${round.game} wurde beendet.`);
+  }
+
   function onMessage(m) {
     const key = chatKey(m.roundId);
     appendMessage(m);
@@ -1004,6 +1029,7 @@
     });
     socket.on('round', onRoundEvent);
     socket.on('round:deleted', onRoundDeleted);
+    socket.on('round:ended', onRoundEnded);
     socket.on('message', onMessage);
     socket.on('message:deleted', ({ id, roundId }) => {
       const key = chatKey(roundId);
@@ -1340,6 +1366,13 @@
   for (const b of $$('.tab')) b.addEventListener('click', () => switchTab(b.dataset.tab));
   $('#new-round').addEventListener('click', () => openEditDialog());
   $('#manage-games').addEventListener('click', openGamesAdmin);
+  // Sitzplatz-Schreibweise vereinheitlichen wie der Server: "b7" / "B 7" → "B-07"
+  for (const input of $$('.seat-input')) {
+    input.addEventListener('change', () => {
+      const m = input.value.trim().toUpperCase().match(/^([A-Z])\s*-?\s*(\d{1,2})$/);
+      if (m) input.value = `${m[1]}-${m[2].padStart(2, '0')}`;
+    });
+  }
   $('#user-form').addEventListener('submit', saveUser);
   for (const b of $$('[data-ban]')) b.addEventListener('click', () => banUser(b.dataset.ban));
   $('#user-delete').addEventListener('click', async () => {
@@ -1443,7 +1476,13 @@
     if (!state.me) return;
     renderRounds();
     if (state.openRoundId !== null && $('#round-dialog').open) {
-      $('#rd-meta').firstChild.lastChild.textContent = ` (${relative(state.rounds.get(state.openRoundId).startsAt)})`;
+      const r = state.rounds.get(state.openRoundId);
+      if (!r || roundExpired(r)) {
+        $('#round-dialog').close();
+      } else {
+        $('#rd-meta').firstChild.lastChild.textContent = ` (${relative(r.startsAt)})`;
+        $('#rd-actions').replaceChildren(...roundActions(r)); // ab Start: "Runde beendet" statt "Absagen"
+      }
     }
     checkReminders();
     updateChatBanUI(); // zeitlich begrenzte Chat-Sperre läuft ab

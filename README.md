@@ -4,12 +4,13 @@ Mitspieler finden auf der LAN-Party: Teilnehmer kündigen Spielrunden an (z.B. �
 
 ## Funktionen
 
-- **Anmeldung nur mit Nickname**, optional mit Sitzplatz, ohne Passwort. Auf dem Handy meldet man sich mit demselben Nickname per **QR-Code** an (unter *Profil & Einstellungen → Auf dem Handy anmelden*), ohne etwas einzutippen.
+- **Anmeldung nur mit Nickname**, optional mit Sitzplatz im Format `B-07` (Buchstabe, Bindestrich, zwei Ziffern; „b7“ wird automatisch zu „B-07“), ohne Passwort. Auf dem Handy meldet man sich mit demselben Nickname per **QR-Code** an (unter *Profil & Einstellungen → Auf dem Handy anmelden*), ohne etwas einzutippen.
 - **Runden ankündigen**:
   - Spiel aus der **Spieleliste mit Logos** wählen oder frei eintippen. Die Auswahlliste filtert beim Tippen, lässt sich per Pfeiltasten bedienen und füllt die Spielerzahl vor. Mitgeliefert sind 36 typische LAN-Spiele
   - Tag (die **Event-Tage** aus dem Branding) und Uhrzeit, mit Schnellwahl „jetzt / in 15 min / …“
   - optional ein **Spielmodus** (z.B. „Instagib“, max. 24 Zeichen; früher genutzte Modi werden vorgeschlagen), **Max. Spieler** und eine Beschreibung
 - **Beitreten und Verlassen.** Ist die Runde voll, kommt man auf die **Warteliste** und rückt automatisch nach, sobald ein Platz frei wird.
+- **Nach dem Start** bleibt eine Runde 3 Stunden in der App (unter „Bereits gestartet“), Beitreten und Chat gehen weiter. Mit **„Runde beendet“** nimmt der Ersteller sie vorher sofort aus App und Beamer.
 - **Chat**: ein globaler Chat und ein eigener Chat pro Runde, mit `@Nickname`-Erwähnungen.
   - Ohne Scrollbalken: Es stehen nur so viele Nachrichten da, wie ins Fenster passen. Ältere fallen oben heraus, gespeichert werden pro Chat die letzten 50.
   - Nachrichten von gestern oder früher zeigen das Datum.
@@ -32,6 +33,7 @@ Mitspieler finden auf der LAN-Party: Teilnehmer kündigen Spielrunden an (z.B. �
 - **Aushang** (`/aushang`): eine druckfertige A4-Seite mit Logo, großem QR-Code und kurzer Anleitung zum Auslegen auf den Tischen.
 - **Beamer-Ansicht** (`/beamer`): eine Vollbild-Übersicht der nächsten Runden mit Spielmodus, freien Plätzen, Uhrzeit, QR-Code und Anzahl der Spieler online.
   - Sie aktualisiert sich alle 10 Sekunden und lädt sich nach einem Server-Update selbst neu.
+  - Laufende Runden stehen 30 Minuten lang unter „Läuft gerade“.
   - Pro Seite zeigt sie so viele Runden, wie auf den Bildschirm passen. Bei mehr Runden gibt es höchstens eine zweite Seite: Seite 1 steht 30 Sekunden, Seite 2 zehn Sekunden. Was auch dort nicht mehr passt, wird als „X weitere Runden in der App“ angezeigt. Ein Klick schaltet den Vollbildmodus um. Die Ansicht braucht keinen Login.
 - **Admin-Modus** (per Passwort):
   - Spieleliste pflegen: Spiele anlegen, Max. Spieler festlegen, Cover hochladen oder als URL eintragen
@@ -107,7 +109,7 @@ brands/maxlan/
   "favicon": "favicon.png",
   "eventStart": "2026-11-06",
   "eventEnd": "2026-11-08",
-  "seatHint": "z.B. Tisch 4",
+  "seatHint": "z.B. B-07",
   "colors": {
     "bg": "#000000", "surface": "#121318", "surface2": "#1c1e26", "border": "#2c2f3a",
     "text": "#eeeeee", "muted": "#9a9cab",
@@ -132,7 +134,7 @@ Den Server also einmal **vor** der Veranstaltung mit Internetzugang starten, ode
 
 Für eine neue Veranstaltung den Ordner kopieren, anpassen und `BRAND_DIR` darauf zeigen lassen.
 
-> **Maxlan-Profil:** Logo (aus dem Seitenbanner freigestellt), Favicon und Farben (Rot `#a2271f` auf Schwarz) stammen von [maxlan.de](https://www.maxlan.de). Eingetragen ist die **Maxlan 33** (6.–8. November 2026, Stadthalle Haselünne). Für die nächste Maxlan in `brands/maxlan/brand.json` nur `eventName`, `eventStart` und `eventEnd` anpassen. Da es keine Sitzplatzreservierung gibt, lautet der Sitzplatz-Hinweis „z.B. Tisch 4“.
+> **Maxlan-Profil:** Logo (aus dem Seitenbanner freigestellt), Favicon und Farben (Rot `#a2271f` auf Schwarz) stammen von [maxlan.de](https://www.maxlan.de). Eingetragen ist die **Maxlan 33** (6.–8. November 2026, Stadthalle Haselünne). Für die nächste Maxlan in `brands/maxlan/brand.json` nur `eventName`, `eventStart` und `eventEnd` anpassen.
 
 ## Betrieb im LAN vs. im Internet
 
