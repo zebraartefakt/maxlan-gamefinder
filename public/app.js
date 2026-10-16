@@ -605,6 +605,26 @@
 
   // ---- Chat ---------------------------------------------------------------
 
+  const CHAT_KEEP = 50; // wie der Server: nur die neuesten Nachrichten je Chat
+  const fmtChatDay = new Intl.DateTimeFormat('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+
+  /** "14:05" für heute, "gestern 14:05" bzw. "Do., 24.09. 14:05" für ältere Nachrichten */
+  function chatTime(ts) {
+    const time = fmtTime.format(ts);
+    if (dayKey(ts) === dayKey(Date.now())) return time;
+    if (dayKey(ts) === dayKey(Date.now() - 86400000)) return `gestern ${time}`;
+    return `${fmtChatDay.format(ts)} ${time}`;
+  }
+
+  /**
+   * Kein Scrollbalken: Es bleiben nur so viele Nachrichten stehen, wie ins Fenster passen –
+   * die älteste fällt oben heraus. Die neueste bleibt immer sichtbar.
+   */
+  function fitChat(log) {
+    if (!log.clientHeight) return; // gerade nicht sichtbar – wird beim Anzeigen neu gemessen
+    while (log.children.length > 1 && log.scrollHeight > log.clientHeight + 1) log.firstElementChild.remove();
+  }
+
   const chatKey = (roundId) => (roundId === null || roundId === undefined ? 'global' : Number(roundId));
 
   async function loadMessages(key) {
@@ -628,7 +648,7 @@
     return el('div', { class: `msg${mine ? ' mine' : ''}${mention ? ' mention' : ''}`, dataset: { id: m.id } },
       el('div', { class: 'msg-head' },
         nick(m.user),
-        el('time', { class: 'muted small', title: new Date(m.createdAt).toLocaleString('de-DE') }, fmtTime.format(m.createdAt)),
+        el('time', { class: 'muted small', title: new Date(m.createdAt).toLocaleString('de-DE') }, chatTime(m.createdAt)),
         state.adminPassword
           ? el('button', { class: 'icon-btn small', title: 'Nachricht löschen', onclick: () => adminDeleteMessage(m.id) }, '🗑')
           : null),
@@ -645,7 +665,7 @@
       return;
     }
     log.replaceChildren(...(msgs.length ? msgs.map(messageNode) : [el('p', { class: 'muted center' }, 'Noch keine Nachrichten.')]));
-    log.scrollTop = log.scrollHeight;
+    fitChat(log);
   }
 
   function appendMessage(m) {
@@ -653,14 +673,13 @@
     const list = state.messages.get(key);
     if (!list) return;
     list.push(m);
-    if (list.length > 500) list.splice(0, list.length - 500);
+    if (list.length > CHAT_KEEP) list.splice(0, list.length - CHAT_KEEP);
     const box = chatContainer(key);
     if (!box) return;
     const log = $('.chat-log', box);
-    const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
     if (list.length === 1) log.replaceChildren();
     log.append(messageNode(m));
-    if (atBottom || m.user.id === state.me.id) log.scrollTop = log.scrollHeight;
+    fitChat(log);
   }
 
   async function sendMessage(e) {
@@ -669,11 +688,17 @@
     const box = form.closest('.chat');
     const key = box.dataset.chat;
     const text = form.text.value.trim();
-    if (!text) return;
+    const button = $('button', form);
+    if (!text || button.disabled) return;
+    button.disabled = true; // kein doppeltes Absenden während die Nachricht unterwegs ist
     try {
       await api('POST', '/messages', { roundId: key === 'global' ? null : Number(key), text });
       form.text.value = '';
-    } catch (err) { toast(err.message, 'error'); }
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      button.disabled = false;
+    }
   }
 
   function chatVisible(key) {
@@ -1285,6 +1310,15 @@
   }
 
   for (const f of $$('.chat-form')) f.addEventListener('submit', sendMessage);
+  // Neu aufbauen, wenn sich die Größe des Chatfensters ändert (Tab gewechselt, Dialog geöffnet,
+  // Handy gedreht) – dann passen evtl. mehr oder weniger Nachrichten hinein
+  const chatResize = new ResizeObserver((entries) => {
+    for (const { target } of entries) {
+      const key = target.closest('.chat').dataset.chat;
+      if (key) renderChat(key === 'global' ? 'global' : Number(key));
+    }
+  });
+  for (const log of $$('.chat-log')) chatResize.observe(log);
 
   for (const dlg of $$('dialog')) {
     dlg.addEventListener('click', (e) => {

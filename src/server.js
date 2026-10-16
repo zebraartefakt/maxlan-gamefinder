@@ -14,7 +14,26 @@ const { loadBrand } = require('./brand');
 
 const LIMITS = { nickname: 24, seat: 16, game: 60, mode: 24, description: 300, message: 500 };
 const ROUND_VISIBLE_AFTER_START_MS = 12 * 60 * 60 * 1000;
-const CHAT_MIN_INTERVAL_MS = 400;
+// Chat: pro Chat werden nur die neuesten Nachrichten gespeichert; Spam-Schutz je Nutzer
+const CHAT_KEEP = 50;
+const SPAM = {
+  minIntervalMs: 400, // Mindestabstand zwischen zwei Nachrichten
+  windowMs: 10000, // Zeitfenster für die Höchstzahl …
+  maxPerWindow: 5, // … an Nachrichten
+  duplicateMs: 60000, // gleiche Nachricht erst nach dieser Zeit erneut
+  strikesToMute: 3, // so viele Verstöße …
+  strikeWindowMs: 60000, // … innerhalb dieser Zeit …
+  muteMs: 60000, // … führen zur Stummschaltung
+};
+const MAX_REPEAT_CHARS = 8; // "aaaaaaaaaaaaaaa" → "aaaaaaaa"
+
+/** Leerzeichen/Zeilenumbrüche zusammenfassen und lange Zeichenwiederholungen kürzen. */
+function normalizeMessage(text) {
+  return text
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(new RegExp(`(.)\\1{${MAX_REPEAT_CHARS},}`, 'gu'), (run, ch) => ch.repeat(MAX_REPEAT_CHARS));
+}
 const BOARD_PAST_MS = 3 * 60 * 60 * 1000;
 /** Wie weit eine Startzeit in der Vergangenheit liegen darf (um eine gerade gestartete Runde nachzutragen). */
 const PAST_TOLERANCE_MS = 60 * 60 * 1000;
@@ -147,7 +166,39 @@ function createApp({
   /** userId -> number of open sockets */
   const online = new Map();
   /** userId -> timestamp of last chat message */
-  const lastChat = new Map();
+  const chatGuard = new Map(); // userId → { times, lastText, lastAt, strikes, mutedUntil }
+
+  /** Wirft HTTP 429, wenn die Nachricht gegen den Spam-Schutz verstößt. */
+  function checkSpam(userId, text, now) {
+    const g = chatGuard.get(userId) || { times: [], lastText: '', lastAt: 0, strikes: [], mutedUntil: 0 };
+    chatGuard.set(userId, g);
+    const secs = (ms) => Math.max(1, Math.ceil(ms / 1000));
+    if (g.mutedUntil > now) {
+      throw new HttpError(429, `Wegen zu vieler Nachrichten bist du noch ${secs(g.mutedUntil - now)} s stummgeschaltet.`);
+    }
+    const strike = (message) => {
+      g.strikes = g.strikes.filter((t) => now - t < SPAM.strikeWindowMs);
+      g.strikes.push(now);
+      if (g.strikes.length >= SPAM.strikesToMute) {
+        g.mutedUntil = now + SPAM.muteMs;
+        g.strikes = [];
+        throw new HttpError(429, `Spam-Schutz: Du bist für ${secs(SPAM.muteMs)} s stummgeschaltet.`);
+      }
+      throw new HttpError(429, message);
+    };
+    // Zu schnell hintereinander (z.B. doppelt Enter) wird nur abgelehnt, zählt aber nicht als Verstoß
+    if (now - g.lastAt < SPAM.minIntervalMs) throw new HttpError(429, 'Nicht so schnell!');
+    g.times = g.times.filter((t) => now - t < SPAM.windowMs);
+    if (g.times.length >= SPAM.maxPerWindow) {
+      strike(`Zu viele Nachrichten – warte ${secs(SPAM.windowMs - (now - g.times[0]))} s.`);
+    }
+    if (text.toLowerCase() === g.lastText && now - g.lastAt < SPAM.duplicateMs) {
+      strike('Diese Nachricht hast du gerade schon geschickt.');
+    }
+    g.times.push(now);
+    g.lastText = text.toLowerCase();
+    g.lastAt = now;
+  }
 
   app.disable('x-powered-by');
   app.use(express.json({ limit: '16kb' }));
@@ -342,20 +393,17 @@ function createApp({
   }
 
   api.get('/messages', auth, (req, res) => {
-    res.json({ messages: store.listMessages(parseRoundParam(req.query.round)) });
+    res.json({ messages: store.listMessages(parseRoundParam(req.query.round), CHAT_KEEP) });
   });
 
   api.post('/messages', auth, (req, res) => {
     const roundId = parseRoundParam(req.body.roundId);
-    const text = typeof req.body.text === 'string' ? req.body.text.trim() : '';
+    const text = typeof req.body.text === 'string' ? normalizeMessage(req.body.text) : '';
     if (!text) throw new HttpError(400, 'Nachricht ist leer.');
     if (text.length > LIMITS.message) throw new HttpError(400, `Nachricht ist zu lang (max. ${LIMITS.message}).`);
-    const now = Date.now();
-    if (now - (lastChat.get(req.user.id) || 0) < CHAT_MIN_INTERVAL_MS) {
-      throw new HttpError(429, 'Nicht so schnell!');
-    }
-    lastChat.set(req.user.id, now);
+    checkSpam(req.user.id, text, Date.now());
     const message = store.addMessage(roundId, req.user.id, text);
+    store.pruneMessages(roundId, CHAT_KEEP);
     io.emit('message', message);
     res.status(201).json({ message });
   });

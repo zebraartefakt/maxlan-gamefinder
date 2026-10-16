@@ -107,6 +107,9 @@ function createStore(db) {
                                  WHERE m.round_id = ? ORDER BY m.id DESC LIMIT ?)
                                ORDER BY id`),
     deleteMessage: db.prepare('DELETE FROM messages WHERE id = ?'),
+    // Nur die neuesten Nachrichten je Chat behalten (round_id IS ? passt auch auf NULL = globaler Chat)
+    pruneMessages: db.prepare(`DELETE FROM messages WHERE round_id IS ? AND id NOT IN (
+                                 SELECT id FROM messages WHERE round_id IS ? ORDER BY id DESC LIMIT ?)`),
 
     catalog: db.prepare('SELECT id, name, max_players, cover FROM games ORDER BY name COLLATE NOCASE'),
     catalogById: db.prepare('SELECT id, name, max_players, cover FROM games WHERE id = ?'),
@@ -197,6 +200,10 @@ function createStore(db) {
     messageById(id) {
       const row = q.messageById.get(id);
       return row ? toMessage(row) : null;
+    },
+    /** Löscht alle bis auf die neuesten `keep` Nachrichten eines Chats. */
+    pruneMessages(roundId, keep) {
+      return q.pruneMessages.run(roundId, roundId, keep).changes;
     },
     listMessages(roundId, limit = 200) {
       const rows = roundId == null ? q.messagesGlobal.all(limit) : q.messagesRound.all(roundId, limit);

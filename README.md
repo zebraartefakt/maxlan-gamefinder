@@ -11,6 +11,13 @@ Mitspieler finden auf der LAN-Party: Teilnehmer kündigen Spielrunden an (z.B. �
   - optional ein **Spielmodus** (z.B. „Instagib“, max. 24 Zeichen; früher genutzte Modi werden vorgeschlagen), **Max. Spieler** und eine Beschreibung
 - **Beitreten und Verlassen.** Ist die Runde voll, kommt man auf die **Warteliste** und rückt automatisch nach, sobald ein Platz frei wird.
 - **Chat**: ein globaler Chat und ein eigener Chat pro Runde, mit `@Nickname`-Erwähnungen.
+  - Ohne Scrollbalken: Es stehen nur so viele Nachrichten da, wie ins Fenster passen. Ältere fallen oben heraus, gespeichert werden pro Chat die letzten 50.
+  - Nachrichten von gestern oder früher zeigen das Datum.
+  - Spam-Schutz:
+    - höchstens 5 Nachrichten in 10 Sekunden
+    - dieselbe Nachricht nicht direkt nochmal
+    - Leerzeilen und lange Zeichenketten („neeeeeeeein“) werden gekürzt
+    - nach drei Verstößen innerhalb einer Minute 60 Sekunden stumm
 - **Spielerliste** mit Sitzplätzen und Online-Status.
 - **Benachrichtigungen**, einzeln abschaltbar:
   - neue Runde angekündigt
