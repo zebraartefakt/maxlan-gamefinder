@@ -64,17 +64,23 @@ function openDatabase(file) {
   // Migration: Spielmodus für Datenbanken aus älteren Versionen nachrüsten
   const roundColumns = db.prepare('PRAGMA table_info(rounds)').all().map((c) => c.name);
   if (!roundColumns.includes('mode')) db.exec("ALTER TABLE rounds ADD COLUMN mode TEXT NOT NULL DEFAULT ''");
+  // Migration: Chat-Sperre (Zeitpunkt in ms bis wann; NULL = nicht gesperrt)
+  const userColumns = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
+  if (!userColumns.includes('chat_banned_until')) db.exec('ALTER TABLE users ADD COLUMN chat_banned_until INTEGER');
   return createStore(db);
 }
 
 function createStore(db) {
   const q = {
-    userByToken: db.prepare('SELECT id, nickname, seat FROM users WHERE token = ?'),
-    userByNick: db.prepare('SELECT id, nickname, seat FROM users WHERE nickname = ?'),
-    userById: db.prepare('SELECT id, nickname, seat FROM users WHERE id = ?'),
+    userByToken: db.prepare('SELECT id, nickname, seat, chat_banned_until AS chatBannedUntil FROM users WHERE token = ?'),
+    userByNick: db.prepare('SELECT id, nickname, seat, chat_banned_until AS chatBannedUntil FROM users WHERE nickname = ?'),
+    userById: db.prepare('SELECT id, nickname, seat, chat_banned_until AS chatBannedUntil FROM users WHERE id = ?'),
+    updateUser: db.prepare('UPDATE users SET nickname = ?, seat = ? WHERE id = ?'),
+    setChatBan: db.prepare('UPDATE users SET chat_banned_until = ? WHERE id = ?'),
+    deleteMessagesByUser: db.prepare('DELETE FROM messages WHERE user_id = ?'),
     insertUser: db.prepare('INSERT INTO users (nickname, seat, token, created_at) VALUES (?, ?, ?, ?)'),
     updateSeat: db.prepare('UPDATE users SET seat = ? WHERE id = ?'),
-    listUsers: db.prepare('SELECT id, nickname, seat FROM users ORDER BY nickname COLLATE NOCASE'),
+    listUsers: db.prepare('SELECT id, nickname, seat, chat_banned_until AS chatBannedUntil FROM users ORDER BY nickname COLLATE NOCASE'),
     deleteUser: db.prepare('DELETE FROM users WHERE id = ?'),
 
     insertRound: db.prepare(`INSERT INTO rounds (game, mode, starts_at, max_players, description, host_id, created_at)
@@ -167,6 +173,16 @@ function createStore(db) {
       return q.userById.get(id);
     },
     deleteUser: (id) => q.deleteUser.run(id).changes > 0,
+    updateUser(id, { nickname, seat }) {
+      q.updateUser.run(nickname, seat, id);
+      return q.userById.get(id);
+    },
+    /** Chat-Sperre bis `until` (ms) setzen, `null` hebt sie auf. */
+    setChatBan(id, until) {
+      q.setChatBan.run(until, id);
+      return q.userById.get(id);
+    },
+    deleteMessagesByUser: (id) => q.deleteMessagesByUser.run(id).changes,
 
     createRound({ game, mode = '', startsAt, maxPlayers, description, hostId }) {
       const now = Date.now();

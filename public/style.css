@@ -185,7 +185,7 @@ label.check input { width: auto; accent-color: var(--accent); }
   font-size: .75rem; font-weight: 600; color: var(--muted);
   border: 1px solid var(--border); border-radius: 5px; padding: 0 .3rem;
 }
-.seat.big { font-size: .9rem; color: var(--text); padding: .1rem .5rem; }
+.seat.big { font-size: .9rem; color: var(--text); padding: .1rem .5rem; white-space: nowrap; }
 
 /* ---- Players ---- */
 .player-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
@@ -318,6 +318,13 @@ label.check input { width: auto; accent-color: var(--accent); }
 }
 .slot-img { width: 100%; height: 100%; object-fit: cover; display: grid; }
 #cache-covers { justify-self: start; margin-top: .4rem; }
+
+/* ---- Spieler verwalten ---- */
+.ban-status { margin: 0; color: var(--muted); }
+.ban-status.active, .player .ban-status { color: var(--warn); }
+.ban-buttons { display: flex; gap: .5rem; flex-wrap: wrap; }
+.user-danger { display: flex; gap: .8rem; align-items: center; flex-wrap: wrap; border-top: 1px solid var(--border); padding-top: .9rem; }
+.chat-form.banned input { border-color: var(--warn); }
 
 /* ---- Teilen ---- */
 .warn-text { color: var(--warn); margin: .3rem 0 0; }

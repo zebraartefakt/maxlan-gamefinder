@@ -649,6 +649,9 @@
       el('div', { class: 'msg-head' },
         nick(m.user),
         el('time', { class: 'muted small', title: new Date(m.createdAt).toLocaleString('de-DE') }, chatTime(m.createdAt)),
+        state.adminPassword && !mine
+          ? el('button', { class: 'icon-btn small', title: `${m.user.nickname} verwalten / sperren`, onclick: () => openUserDialog(m.user.id) }, '🔇')
+          : null,
         state.adminPassword
           ? el('button', { class: 'icon-btn small', title: 'Nachricht löschen', onclick: () => adminDeleteMessage(m.id) }, '🗑')
           : null),
@@ -697,7 +700,7 @@
     } catch (err) {
       toast(err.message, 'error');
     } finally {
-      button.disabled = false;
+      button.disabled = isChatBanned(state.me);
     }
   }
 
@@ -742,18 +745,101 @@
     $('#player-list').replaceChildren(...users.map((u) => {
       const rounds = [...state.rounds.values()].filter((r) => r.startsAt > Date.now() - 3 * 3600000 && r.players.some((p) => p.id === u.id));
       return el('li', { class: 'card player' },
-        el('div', {}, nick(u), rounds.length ? el('div', { class: 'muted small' }, rounds.map((r) => r.game).join(', ')) : null),
+        el('div', {}, nick(u),
+          rounds.length ? el('div', { class: 'muted small' }, rounds.map((r) => r.game).join(', ')) : null,
+          state.adminPassword && isChatBanned(u) ? el('div', { class: 'small ban-status' }, `🔇 ${banLabel(u)}`) : null),
         el('div', { class: 'player-right' },
           u.seat ? el('span', { class: 'seat big', title: 'Sitzplatz' }, `💺 ${u.seat}`) : el('span', { class: 'muted small' }, 'kein Platz'),
-          state.adminPassword && u.id !== state.me.id
-            ? el('button', { class: 'icon-btn', title: 'Nutzer löschen (gibt Nickname frei)', onclick: () => adminDeleteUser(u) }, '🗑')
+          state.adminPassword
+            ? el('button', { class: 'icon-btn', title: 'Spieler verwalten', onclick: () => openUserDialog(u.id) }, '✏️')
             : null));
     }));
   }
 
   async function adminDeleteUser(u) {
-    if (!confirm(`Nutzer „${u.nickname}“ löschen? Seine Runden und Nachrichten werden ebenfalls gelöscht, der Nickname wird frei.`)) return;
-    try { await api('DELETE', `/admin/users/${u.id}`); } catch (e) { toast(e.message, 'error'); }
+    if (!confirm(`Nutzer „${u.nickname}“ löschen? Seine Runden und Nachrichten werden ebenfalls gelöscht, der Nickname wird frei.`)) return false;
+    try {
+      await api('DELETE', `/admin/users/${u.id}`);
+      return true;
+    } catch (e) {
+      toast(e.message, 'error');
+      return false;
+    }
+  }
+
+  // ---- Spieler verwalten (Admin) ------------------------------------------
+
+  const BAN_PERMANENT = 8640000000000000; // wie auf dem Server
+  const isChatBanned = (u) => Boolean(u && u.chatBannedUntil && u.chatBannedUntil > Date.now());
+
+  function banLabel(u) {
+    if (!isChatBanned(u)) return 'nicht gesperrt';
+    if (u.chatBannedUntil >= BAN_PERMANENT) return 'dauerhaft vom Chat gesperrt';
+    const until = u.chatBannedUntil;
+    const day = dayKey(until) === dayKey(Date.now()) ? '' : `${fmtShortDay.format(until)} `;
+    return `vom Chat gesperrt bis ${day}${fmtTime.format(until)} Uhr`;
+  }
+
+  function renderUserDialog() {
+    const u = state.users.get(state.manageUserId);
+    if (!u) return;
+    const self = u.id === state.me.id;
+    $('#ban-status').textContent = isChatBanned(u) ? `🔇 ${banLabel(u)}` : 'Nicht gesperrt.';
+    $('#ban-status').classList.toggle('active', isChatBanned(u));
+    $('#ban-lift').hidden = !isChatBanned(u);
+    $('#ban-section').hidden = self;
+    $('#user-delete').closest('.user-danger').hidden = self;
+  }
+
+  function openUserDialog(userId) {
+    const u = state.users.get(userId);
+    if (!u || !state.adminPassword) return;
+    state.manageUserId = userId;
+    const form = $('#user-form');
+    form.nickname.value = u.nickname;
+    form.seat.value = u.seat;
+    $('#user-error').hidden = true;
+    renderUserDialog();
+    $('#user-dialog').showModal();
+  }
+
+  async function saveUser(e) {
+    e.preventDefault();
+    const form = e.target;
+    try {
+      await api('PATCH', `/admin/users/${state.manageUserId}`, { nickname: form.nickname.value, seat: form.seat.value });
+      $('#user-dialog').close();
+    } catch (err) {
+      $('#user-error').textContent = err.message;
+      $('#user-error').hidden = false;
+    }
+  }
+
+  async function banUser(duration) {
+    const u = state.users.get(state.manageUserId);
+    if (!u) return;
+    const what = { '1h': 'für 1 Stunde', '24h': 'für 24 Stunden', permanent: 'dauerhaft' }[duration];
+    if (what && !confirm(`„${u.nickname}“ ${what} vom Chat sperren?\n\nAlle bisherigen Nachrichten von „${u.nickname}“ werden sofort gelöscht.`)) return;
+    try {
+      const { deletedMessages } = await api('POST', `/admin/users/${u.id}/chat-ban`, { duration });
+      toast(what
+        ? `„${u.nickname}“ ${what} gesperrt, ${deletedMessages} ${deletedMessages === 1 ? 'Nachricht' : 'Nachrichten'} gelöscht.`
+        : `Chat-Sperre für „${u.nickname}“ aufgehoben.`);
+    } catch (err) { toast(err.message, 'error'); }
+  }
+
+  /** Eigene Chat-Sperre: Eingabefelder sperren und Grund anzeigen. */
+  function updateChatBanUI() {
+    const banned = isChatBanned(state.me);
+    for (const f of $$('.chat-form')) {
+      f.text.disabled = banned;
+      $('button', f).disabled = banned;
+      f.classList.toggle('banned', banned);
+      if (banned) f.text.value = '';
+      f.text.placeholder = banned
+        ? `Du bist ${banLabel(state.me).replace('vom Chat gesperrt', 'vom Chat ausgeschlossen')}.`
+        : f.closest('[data-chat="global"]') ? 'Nachricht an alle …' : 'Nachricht an die Runde …';
+    }
   }
 
   // ---- Benachrichtigungen -------------------------------------------------
@@ -939,6 +1025,18 @@
       state.users.set(u.id, u);
       if (state.me && u.id === state.me.id) setMe(u);
       if (state.tab === 'players') renderPlayers();
+      // Name/Sitzplatz können sich geändert haben (Admin) → überall neu zeichnen
+      renderRounds();
+      for (const k of state.messages.keys()) renderChat(k);
+      if (state.openRoundId !== null && $('#round-dialog').open) renderRoundDialog();
+      if ($('#user-dialog').open && state.manageUserId === u.id) renderUserDialog();
+    });
+    socket.on('messages:purged', ({ userId }) => {
+      for (const [k, list] of state.messages) {
+        if (!list.some((m) => m.user.id === userId)) continue;
+        state.messages.set(k, list.filter((m) => m.user.id !== userId));
+        renderChat(k);
+      }
     });
     socket.on('catalog', (catalog) => {
       state.catalog = catalog;
@@ -991,6 +1089,7 @@
     $('#me-nick').textContent = user.nickname;
     $('#me-seat').textContent = user.seat || '';
     $('#me-seat').hidden = !user.seat;
+    updateChatBanUI();
   }
 
   function applyBrand(brand) {
@@ -1241,6 +1340,12 @@
   for (const b of $$('.tab')) b.addEventListener('click', () => switchTab(b.dataset.tab));
   $('#new-round').addEventListener('click', () => openEditDialog());
   $('#manage-games').addEventListener('click', openGamesAdmin);
+  $('#user-form').addEventListener('submit', saveUser);
+  for (const b of $$('[data-ban]')) b.addEventListener('click', () => banUser(b.dataset.ban));
+  $('#user-delete').addEventListener('click', async () => {
+    const u = state.users.get(state.manageUserId);
+    if (u && await adminDeleteUser(u)) $('#user-dialog').close();
+  });
   $('#cache-covers').addEventListener('click', cacheCovers);
   $('#rd-cover').addEventListener('error', () => { $('#rd-cover').hidden = true; });
   fitCover($('#rd-cover'));
@@ -1341,6 +1446,7 @@
       $('#rd-meta').firstChild.lastChild.textContent = ` (${relative(state.rounds.get(state.openRoundId).startsAt)})`;
     }
     checkReminders();
+    updateChatBanUI(); // zeitlich begrenzte Chat-Sperre läuft ab
   }, 30000);
 
   /**
