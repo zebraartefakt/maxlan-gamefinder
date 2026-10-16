@@ -64,6 +64,8 @@ function openDatabase(file) {
   // Migration: Spielmodus für Datenbanken aus älteren Versionen nachrüsten
   const roundColumns = db.prepare('PRAGMA table_info(rounds)').all().map((c) => c.name);
   if (!roundColumns.includes('mode')) db.exec("ALTER TABLE rounds ADD COLUMN mode TEXT NOT NULL DEFAULT ''");
+  // Migration: "Runde beendet" (Zeitpunkt in ms; NULL = nicht beendet)
+  if (!roundColumns.includes('ended_at')) db.exec('ALTER TABLE rounds ADD COLUMN ended_at INTEGER');
   // Migration: Chat-Sperre (Zeitpunkt in ms bis wann; NULL = nicht gesperrt)
   const userColumns = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
   if (!userColumns.includes('chat_banned_until')) db.exec('ALTER TABLE users ADD COLUMN chat_banned_until INTEGER');
@@ -88,7 +90,8 @@ function createStore(db) {
     updateRound: db.prepare('UPDATE rounds SET game = ?, mode = ?, starts_at = ?, max_players = ?, description = ? WHERE id = ?'),
     deleteRound: db.prepare('DELETE FROM rounds WHERE id = ?'),
     roundById: db.prepare('SELECT * FROM rounds WHERE id = ?'),
-    roundsSince: db.prepare('SELECT * FROM rounds WHERE starts_at >= ? ORDER BY starts_at, id'),
+    roundsSince: db.prepare('SELECT * FROM rounds WHERE starts_at >= ? AND ended_at IS NULL ORDER BY starts_at, id'),
+    endRound: db.prepare('UPDATE rounds SET ended_at = ? WHERE id = ?'),
     participantsOf: db.prepare(`SELECT u.id, u.nickname, u.seat, p.joined_at
                                 FROM participants p JOIN users u ON u.id = p.user_id
                                 WHERE p.round_id = ? ORDER BY p.joined_at, p.rowid`),
@@ -198,7 +201,12 @@ function createStore(db) {
     deleteRound: (id) => q.deleteRound.run(id).changes > 0,
     rawRound: (id) => q.roundById.get(id),
     getRound: (id) => hydrateRound(q.roundById.get(id)),
+    /** Nicht beendete Runden, die nach `since` starten bzw. gestartet sind */
     listRounds: (since) => q.roundsSince.all(since).map(hydrateRound),
+    endRound(id) {
+      q.endRound.run(Date.now(), id);
+      return hydrateRound(q.roundById.get(id));
+    },
     join(roundId, userId) {
       return q.join.run(roundId, userId, Date.now()).changes > 0;
     },

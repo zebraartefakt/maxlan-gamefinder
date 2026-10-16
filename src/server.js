@@ -13,7 +13,9 @@ const { openDatabase } = require('./db');
 const { loadBrand } = require('./brand');
 
 const LIMITS = { nickname: 24, seat: 16, game: 60, mode: 24, description: 300, message: 500 };
-const ROUND_VISIBLE_AFTER_START_MS = 12 * 60 * 60 * 1000;
+// Wie lange eine gestartete Runde noch in der App steht (beitreten, chatten) – sofern sie
+// nicht vorher als beendet markiert wird
+const ROUND_VISIBLE_AFTER_START_MS = 3 * 60 * 60 * 1000;
 // Chat: pro Chat werden nur die neuesten Nachrichten gespeichert; Spam-Schutz je Nutzer
 const CHAT_KEEP = 50;
 const SPAM = {
@@ -37,7 +39,7 @@ function normalizeMessage(text) {
     .trim()
     .replace(new RegExp(`(.)\\1{${MAX_REPEAT_CHARS},}`, 'gu'), (run, ch) => ch.repeat(MAX_REPEAT_CHARS));
 }
-const BOARD_PAST_MS = 3 * 60 * 60 * 1000;
+const BOARD_PAST_MS = ROUND_VISIBLE_AFTER_START_MS;
 /** Wie weit eine Startzeit in der Vergangenheit liegen darf (um eine gerade gestartete Runde nachzutragen). */
 const PAST_TOLERANCE_MS = 60 * 60 * 1000;
 const COVER_MAX_BYTES = 4 * 1024 * 1024;
@@ -58,6 +60,18 @@ function cleanText(value, max, { required = false, field = 'Feld' } = {}) {
   if (required && !text) throw new HttpError(400, `${field} darf nicht leer sein.`);
   if (text.length > max) throw new HttpError(400, `${field} darf höchstens ${max} Zeichen lang sein.`);
   return text;
+}
+
+/**
+ * Sitzplatz im Format „B-07“ (Buchstabe, Bindestrich, zwei Ziffern). Schreibweisen wie „b7“,
+ * „B 7“ oder „b-07“ werden vereinheitlicht; leer bleibt erlaubt.
+ */
+function parseSeat(value) {
+  const raw = typeof value === 'string' ? value.trim().toUpperCase() : '';
+  if (!raw) return '';
+  const m = raw.match(/^([A-Z])\s*-?\s*(\d{1,2})$/);
+  if (!m) throw new HttpError(400, 'Sitzplatz bitte im Format B-07 angeben (Buchstabe, Bindestrich, zwei Ziffern).');
+  return `${m[1]}-${m[2].padStart(2, '0')}`;
 }
 
 function parseRoundInput(body, { previousStartsAt = null } = {}) {
@@ -248,9 +262,10 @@ function createApp({
     return Boolean(adminPassword && pw && safeEqual(pw, adminPassword));
   }
 
-  function loadRound(req) {
+  function loadRound(req, { allowEnded = false } = {}) {
     const round = store.rawRound(Number(req.params.id));
     if (!round) throw new HttpError(404, 'Runde nicht gefunden.');
+    if (round.ended_at && !allowEnded) throw new HttpError(400, 'Diese Runde ist schon beendet.');
     return round;
   }
 
@@ -267,7 +282,13 @@ function createApp({
 
   api.get('/config', (_req, res) => {
     res.json({
-      version, adminEnabled: Boolean(adminPassword), publicBoard, limits: LIMITS, pastToleranceMs: PAST_TOLERANCE_MS, brand: brand.brand,
+      version,
+      adminEnabled: Boolean(adminPassword),
+      publicBoard,
+      limits: LIMITS,
+      pastToleranceMs: PAST_TOLERANCE_MS,
+      roundVisibleMs: ROUND_VISIBLE_AFTER_START_MS,
+      brand: brand.brand,
     });
   });
 
@@ -305,7 +326,7 @@ function createApp({
     }
     const nickname = cleanText(req.body.nickname, LIMITS.nickname, { required: true, field: 'Nickname' });
     if (nickname.length < 2) throw new HttpError(400, 'Nickname muss mindestens 2 Zeichen haben.');
-    const seat = cleanText(req.body.seat, LIMITS.seat, { field: 'Sitzplatz' });
+    const seat = parseSeat(req.body.seat);
 
     const existing = store.userByNick(nickname);
     if (existing) {
@@ -321,7 +342,7 @@ function createApp({
   api.get('/me', auth, (req, res) => res.json({ user: req.user }));
 
   api.patch('/me', auth, (req, res) => {
-    const seat = cleanText(req.body.seat, LIMITS.seat, { field: 'Sitzplatz' });
+    const seat = parseSeat(req.body.seat);
     const user = store.updateSeat(req.user.id, seat);
     io.emit('user', user);
     res.json({ user });
@@ -357,8 +378,22 @@ function createApp({
     res.json({ round });
   });
 
-  api.delete('/rounds/:id', auth, (req, res) => {
+  // "Runde beendet": nimmt eine gestartete Runde sofort aus App und Beamer
+  api.post('/rounds/:id/end', auth, (req, res) => {
     const raw = loadRound(req);
+    if (raw.host_id !== req.user.id && !isAdmin(req)) {
+      throw new HttpError(403, 'Nur der Ersteller kann die Runde beenden.');
+    }
+    if (raw.starts_at > Date.now()) {
+      throw new HttpError(400, 'Die Runde hat noch nicht begonnen – sag sie stattdessen ab.');
+    }
+    const round = store.endRound(raw.id);
+    io.emit('round:ended', { round, user: req.user });
+    res.json({ round });
+  });
+
+  api.delete('/rounds/:id', auth, (req, res) => {
+    const raw = loadRound(req, { allowEnded: true });
     if (raw.host_id !== req.user.id && !isAdmin(req)) {
       throw new HttpError(403, 'Nur der Ersteller kann die Runde absagen.');
     }
@@ -398,10 +433,12 @@ function createApp({
 
   // ---- Chat ---------------------------------------------------------------
 
-  function parseRoundParam(value) {
+  function parseRoundParam(value, { forWrite = false } = {}) {
     if (value === undefined || value === null || value === '' || value === 'global') return null;
     const id = Number(value);
-    if (!Number.isInteger(id) || !store.rawRound(id)) throw new HttpError(404, 'Runde nicht gefunden.');
+    const round = Number.isInteger(id) ? store.rawRound(id) : null;
+    if (!round) throw new HttpError(404, 'Runde nicht gefunden.');
+    if (forWrite && round.ended_at) throw new HttpError(400, 'Diese Runde ist schon beendet.');
     return id;
   }
 
@@ -410,7 +447,7 @@ function createApp({
   });
 
   api.post('/messages', auth, (req, res) => {
-    const roundId = parseRoundParam(req.body.roundId);
+    const roundId = parseRoundParam(req.body.roundId, { forWrite: true });
     const text = typeof req.body.text === 'string' ? normalizeMessage(req.body.text) : '';
     if (!text) throw new HttpError(400, 'Nachricht ist leer.');
     if (text.length > LIMITS.message) throw new HttpError(400, `Nachricht ist zu lang (max. ${LIMITS.message}).`);
@@ -441,7 +478,7 @@ function createApp({
     const user = loadUser(req);
     const nickname = cleanText(req.body.nickname ?? user.nickname, LIMITS.nickname, { required: true, field: 'Nickname' });
     if (nickname.length < 2) throw new HttpError(400, 'Nickname muss mindestens 2 Zeichen haben.');
-    const seat = cleanText(req.body.seat ?? user.seat, LIMITS.seat, { field: 'Sitzplatz' });
+    const seat = req.body.seat === undefined ? user.seat : parseSeat(req.body.seat);
     const taken = store.userByNick(nickname);
     if (taken && taken.id !== user.id) throw new HttpError(409, 'Dieser Nickname ist schon vergeben.');
     const updated = store.updateUser(user.id, { nickname, seat });

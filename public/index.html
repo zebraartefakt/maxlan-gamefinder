@@ -23,7 +23,7 @@
         <input name="nickname" required minlength="2" maxlength="24" autocomplete="nickname" autofocus>
       </label>
       <label>Sitzplatz <span class="muted">(optional)</span>
-        <input name="seat" maxlength="16" class="seat-input">
+        <input name="seat" class="seat-input" maxlength="5" pattern="[A-Za-z] ?-? ?[0-9]{1,2}" title="Format: Buchstabe, Bindestrich, zwei Ziffern – z.B. B-07" autocapitalize="characters">
       </label>
       <p class="error" id="login-error" hidden></p>
       <button class="btn primary" type="submit">Los geht's</button>
@@ -173,7 +173,7 @@
         <button type="button" class="icon-btn" data-close aria-label="Schließen">✕</button>
       </div>
       <label>Sitzplatz
-        <input name="seat" maxlength="16" class="seat-input">
+        <input name="seat" class="seat-input" maxlength="5" pattern="[A-Za-z] ?-? ?[0-9]{1,2}" title="Format: Buchstabe, Bindestrich, zwei Ziffern – z.B. B-07" autocapitalize="characters">
       </label>
 
       <h3>App teilen</h3>
@@ -238,7 +238,7 @@
         <input name="nickname" required minlength="2" maxlength="24" autocomplete="off">
       </label>
       <label>Sitzplatz
-        <input name="seat" maxlength="16" class="seat-input" autocomplete="off">
+        <input name="seat" class="seat-input" maxlength="5" pattern="[A-Za-z] ?-? ?[0-9]{1,2}" title="Format: Buchstabe, Bindestrich, zwei Ziffern – z.B. B-07" autocapitalize="characters" autocomplete="off">
       </label>
       <p class="error" id="user-error" hidden></p>
       <div class="dialog-foot">

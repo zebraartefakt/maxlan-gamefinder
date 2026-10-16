@@ -45,13 +45,13 @@ async function login(nickname, seat = '') {
 const inOneHour = () => Date.now() + 60 * 60 * 1000;
 
 test('Login: Nickname ist eindeutig (ohne Groß-/Kleinschreibung)', async () => {
-  const token = await login('Alice', 'A1');
+  const token = await login('Alice', 'a1');
   const dup = await call('POST', '/login', { body: { nickname: 'alice' } });
   assert.equal(dup.status, 409);
 
   const again = await call('POST', '/login', { body: { nickname: 'Alice', token } });
   assert.equal(again.status, 200);
-  assert.equal(again.data.user.seat, 'A1');
+  assert.equal(again.data.user.seat, 'A-01');
 
   const byCode = await call('POST', '/login', { body: { token } });
   assert.equal(byCode.status, 200);
@@ -424,7 +424,7 @@ test('Admin-Passwort mit Sonderzeichen (URL-kodiert übertragen)', async () => {
 });
 
 test('Admin: Spieler umbenennen und Sitzplatz ändern', async () => {
-  const t = await login('Tippfehlr', 'A1');
+  const t = await login('Tippfehlr', 'A-01');
   await login('Belegt');
   const u = (await call('GET', '/me', { token: t })).data.user;
 
@@ -432,7 +432,7 @@ test('Admin: Spieler umbenennen und Sitzplatz ändern', async () => {
   const renamed = await call('PATCH', `/admin/users/${u.id}`, { admin: 'geheim', body: { nickname: ' Tippfehler ', seat: 'B7' } });
   assert.equal(renamed.status, 200);
   assert.equal(renamed.data.user.nickname, 'Tippfehler');
-  assert.equal(renamed.data.user.seat, 'B7');
+  assert.equal(renamed.data.user.seat, 'B-07');
   // Der Spieler bleibt mit seinem Gerät angemeldet – nur der Name ist neu
   assert.equal((await call('GET', '/me', { token: t })).data.user.nickname, 'Tippfehler');
 
@@ -502,4 +502,65 @@ test('Migration: alte Datenbank ohne Chat-Sperre-Spalte', () => {
   assert.equal(store.userByToken('tok').chatBannedUntil, null);
   assert.equal(store.setChatBan(1, 123).chatBannedUntil, 123);
   store.close();
+});
+
+test('Runde beendet: nur gestartete Runden, nur Ersteller/Admin, danach weg', async () => {
+  const host = await login('Gastgeber');
+  const other = await login('Mitspieler');
+  const started = (await call('POST', '/rounds', { token: host, body: { game: 'FlatOut 2', startsAt: Date.now() - 10 * 60 * 1000 } })).data.round;
+  const upcoming = (await call('POST', '/rounds', { token: host, body: { game: 'UT2004', startsAt: inOneHour() } })).data.round;
+  await call('POST', `/rounds/${started.id}/join`, { token: other });
+
+  assert.equal((await call('POST', `/rounds/${upcoming.id}/end`, { token: host })).status, 400); // noch nicht begonnen
+  assert.equal((await call('POST', `/rounds/${started.id}/end`, { token: other })).status, 403);
+
+  const socket = ioClient(base, { auth: { token: other }, transports: ['websocket'] });
+  await new Promise((resolve) => socket.on('connect', resolve));
+  const ended = new Promise((resolve) => socket.on('round:ended', resolve));
+  const res = await call('POST', `/rounds/${started.id}/end`, { token: host });
+  assert.equal(res.status, 200);
+  assert.equal((await ended).round.id, started.id);
+  socket.close();
+
+  const ids = (await call('GET', '/rounds', { token: other })).data.rounds.map((r) => r.id);
+  assert.ok(!ids.includes(started.id) && ids.includes(upcoming.id));
+  const board = await (await fetch(base + '/api/public/board')).json();
+  assert.ok(!board.rounds.some((r) => r.id === started.id));
+  assert.equal((await call('POST', `/rounds/${started.id}/join`, { token: await login('Zuspät') })).status, 400);
+  assert.equal((await call('POST', '/messages', { token: other, body: { roundId: started.id, text: 'Hallo?' } })).status, 400);
+
+  // Admin darf fremde Runden beenden
+  const r2 = (await call('POST', '/rounds', { token: host, body: { game: 'Q3', startsAt: Date.now() - 60 * 1000 } })).data.round;
+  assert.equal((await call('POST', `/rounds/${r2.id}/end`, { token: other, admin: 'geheim' })).status, 200);
+});
+
+test('Gestartete Runden sind 3 Stunden sichtbar', async () => {
+  const t = await login('Zeitfenster');
+  const { round } = (await call('POST', '/rounds', { token: t, body: { game: 'Alt-Test', startsAt: Date.now() - 30 * 60 * 1000 } })).data;
+  ctx.store.updateRound(round.id, { ...round, startsAt: Date.now() - 3.5 * 60 * 60 * 1000 });
+  const ids = (await call('GET', '/rounds', { token: t })).data.rounds.map((r) => r.id);
+  assert.ok(!ids.includes(round.id));
+  assert.equal((await call('POST', `/rounds/${round.id}/join`, { token: await login('Nachzügler') })).status, 400);
+  assert.equal((await call('GET', '/config')).data.roundVisibleMs, 3 * 60 * 60 * 1000);
+});
+
+test('Sitzplatz im Format Buchstabe-Ziffer-Ziffer', async () => {
+  for (const [input, expected] of [['B-07', 'B-07'], ['b7', 'B-07'], ['C 12', 'C-12'], ['z-3', 'Z-03'], ['', '']]) {
+    const nick = `Sitz${Math.random().toString(36).slice(2, 8)}`;
+    const res = await call('POST', '/login', { body: { nickname: nick, seat: input } });
+    assert.equal(res.status, 201, input);
+    assert.equal(res.data.user.seat, expected, input);
+  }
+  for (const bad of ['Tisch 4', '12', 'AB-12', 'B-123', 'B12x']) {
+    const res = await call('POST', '/login', { body: { nickname: `Falsch${Math.random().toString(36).slice(2, 8)}`, seat: bad } });
+    assert.equal(res.status, 400, bad);
+    assert.match(res.data.error, /Format B-07/);
+  }
+  const t = await login('Umzug', 'A-01');
+  assert.equal((await call('PATCH', '/me', { token: t, body: { seat: 'd 9' } })).data.user.seat, 'D-09');
+  assert.equal((await call('PATCH', '/me', { token: t, body: { seat: 'Fenster' } })).status, 400);
+  const me = (await call('GET', '/me', { token: t })).data.user;
+  assert.equal((await call('PATCH', `/admin/users/${me.id}`, { admin: 'geheim', body: { seat: 'xx' } })).status, 400);
+  // Admin ändert nur den Namen → bestehender Sitzplatz bleibt unangetastet
+  assert.equal((await call('PATCH', `/admin/users/${me.id}`, { admin: 'geheim', body: { nickname: 'Umzug2' } })).data.user.seat, 'D-09');
 });

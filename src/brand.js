@@ -13,7 +13,7 @@ const DEFAULT_BRAND = {
   favicon: '',
   eventStart: '',
   eventEnd: '',
-  seatHint: 'z.B. B12',
+  seatHint: 'z.B. B-07',
   colors: {
     bg: '#0b0d12',
     surface: '#151923',
